@@ -8,103 +8,26 @@
 
 <style>
 * { box-sizing: border-box; }
+body { margin: 0; font-family: Arial, sans-serif; background: black; color: #e0c3fc; overflow: hidden; }
+@keyframes pulse { 0% { text-shadow:0 0 5px #9b59b6;} 100%{ text-shadow:0 0 20px #d580ff; } }
 
-body {
-  margin: 0;
-  background: black;
-  font-family: Arial, sans-serif;
-  color: #e0c3fc;
-  overflow: hidden;
-}
+/* AUTH BOX */
+#authBox { position: fixed; inset:0; display:flex; align-items:center; justify-content:center; background:black; z-index:10; }
+.panel { width: 320px; padding:25px; background:rgba(0,0,0,0.85); border:2px solid #9b59b6; border-radius:12px; box-shadow:0 0 25px #8e44ad; text-align:center;}
+.panel h2 { margin-top:0; animation: pulse 2s infinite alternate; }
+input { width:100%; padding:10px; margin:8px 0; background:black; border:1px solid #9b59b6; border-radius:6px; color:white; }
+button { margin-top:10px; width:100%; padding:10px; font-weight:bold; border-radius:8px; cursor:pointer; border:2px solid #9b59b6; background:linear-gradient(45deg,#9b59b6,#8e44ad); color:white; box-shadow:0 0 15px #9b59b6; }
+.switch { margin-top:10px; background:none; border:none; color:#a970ff; cursor:pointer; }
+#msg,#msg2{margin-top:10px;color:#ff6b6b;}
+#signupPanel{display:none;}
 
-@keyframes pulse {
-  0% { text-shadow: 0 0 5px #9b59b6; }
-  100% { text-shadow: 0 0 20px #d580ff; }
-}
-
-/* AUTH OVERLAY */
-#authBox {
-  position: fixed;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: black;
-  z-index: 10;
-}
-
-.panel {
-  width: 320px;
-  padding: 25px;
-  background: rgba(0,0,0,0.85);
-  border: 2px solid #9b59b6;
-  border-radius: 12px;
-  box-shadow: 0 0 25px #8e44ad;
-  text-align: center;
-}
-
-.panel h2 {
-  margin-top: 0;
-  animation: pulse 2s infinite alternate;
-}
-
-input {
-  width: 100%;
-  padding: 10px;
-  margin: 8px 0;
-  background: black;
-  border: 1px solid #9b59b6;
-  border-radius: 6px;
-  color: white;
-}
-
-button {
-  margin-top: 10px;
-  width: 100%;
-  padding: 10px;
-  font-weight: bold;
-  border-radius: 8px;
-  cursor: pointer;
-  border: 2px solid #9b59b6;
-  background: linear-gradient(45deg, #9b59b6, #8e44ad);
-  color: white;
-  box-shadow: 0 0 15px #9b59b6;
-}
-
-.switch {
-  margin-top: 10px;
-  background: none;
-  border: none;
-  color: #a970ff;
-  cursor: pointer;
-}
-
-#msg, #msg2 {
-  margin-top: 10px;
-  color: #ff6b6b;
-}
-
-/* SIGNUP HIDDEN */
-#signupPanel { display: none; }
-
-/* MAIN APP (IFRAME) */
-#app {
-  position: fixed;
-  inset: 0;
-  display: none;
-}
-
-#app iframe {
-  width: 100vw;
-  height: 100vh;
-  border: none;
-}
+/* APP IFRAME */
+#app{position:fixed; inset:0; display:none;}
+#app iframe{width:100vw;height:100vh;border:none;}
 </style>
 </head>
-
 <body>
 
-<!-- AUTH -->
 <div id="authBox">
   <div class="panel" id="loginPanel">
     <h2>SSP Login</h2>
@@ -126,12 +49,8 @@ button {
   </div>
 </div>
 
-<!-- APP -->
 <div id="app">
-  <iframe
-    src="https://sspv2play.neocities.org/home"
-    allowfullscreen
-  ></iframe>
+  <iframe src="https://sspv2play.neocities.org/home" allowfullscreen></iframe>
 </div>
 
 <script src="auth.js"></script>
