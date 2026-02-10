@@ -1,4 +1,6 @@
 let signup = false;
+let currentUser = null;
+let currentRole = null;
 
 const usernameInput = document.getElementById("username");
 const emailInput = document.getElementById("email");
@@ -8,17 +10,19 @@ const switchMode = document.getElementById("switchMode");
 const authTitle = document.getElementById("authTitle");
 const authError = document.getElementById("authError");
 
-// SWITCH LOGIN / SIGNUP
+// SWITCH MODE
 switchMode.onclick = () => {
   signup = !signup;
   authTitle.textContent = signup ? "Sign Up" : "Login";
   authBtn.textContent = signup ? "Create Account" : "Login";
   emailInput.style.display = signup ? "block" : "none";
-  switchMode.textContent = signup ? "Already have an account?" : "Create an account";
+  switchMode.textContent = signup
+    ? "Already have an account?"
+    : "Create an account";
   authError.textContent = "";
 };
 
-// SUBMIT AUTH
+// AUTH
 authBtn.onclick = async () => {
   const body = {
     username: usernameInput.value,
@@ -39,15 +43,18 @@ authBtn.onclick = async () => {
     return;
   }
 
+  currentUser = data.username;
+  currentRole = data.role;
+
   document.getElementById("authOverlay").style.display = "none";
   document.getElementById("siteContent").style.display = "block";
 
-  if (data.role === "admin") {
+  if (currentRole === "admin") {
     createAdminPanel();
   }
 };
 
-// ADMIN PANEL
+// ===== ADMIN PANEL =====
 function createAdminPanel() {
   const panel = document.createElement("div");
   panel.style.position = "fixed";
@@ -57,6 +64,8 @@ function createAdminPanel() {
   panel.style.background = "#12001f";
   panel.style.border = "2px solid #9b59b6";
   panel.style.padding = "10px";
+  panel.style.maxHeight = "80vh";
+  panel.style.overflowY = "auto";
 
   panel.innerHTML = `
     <button id="loadUsers">Admin Panel</button>
@@ -65,21 +74,27 @@ function createAdminPanel() {
 
   document.body.appendChild(panel);
 
-  document.getElementById("loadUsers").onclick = async () => {
-    const res = await fetch("/api/admin/users");
-    const users = await res.json();
+  document.getElementById("loadUsers").onclick = loadUsers;
+}
 
-    document.getElementById("adminData").innerHTML =
-      users.map(u => `
-        <div>
-          ${u.username}
-          ${u.banned ? "🚫" : "✅"}
-          <button onclick="toggleBan('${u.username}', ${u.banned})">
-            ${u.banned ? "Unban" : "Ban"}
-          </button>
-        </div>
-      `).join("");
-  };
+async function loadUsers() {
+  const res = await fetch("/api/admin/users");
+  const users = await res.json();
+
+  document.getElementById("adminData").innerHTML =
+    users.map(u => `
+      <div style="margin:6px 0;">
+        <b>${u.username}</b>
+        [${u.role}]
+        ${u.banned ? "🚫" : "✅"}
+        <button onclick="toggleBan('${u.username}', ${u.banned})">
+          ${u.banned ? "Unban" : "Ban"}
+        </button>
+        <button onclick="toggleRole('${u.username}', '${u.role}')">
+          ${u.role === "admin" ? "Demote" : "Make Admin"}
+        </button>
+      </div>
+    `).join("");
 }
 
 async function toggleBan(username, banned) {
@@ -88,4 +103,17 @@ async function toggleBan(username, banned) {
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ username, banned: !banned })
   });
+  loadUsers();
+}
+
+async function toggleRole(username, role) {
+  await fetch("/api/admin/role", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      username,
+      role: role === "admin" ? "user" : "admin"
+    })
+  });
+  loadUsers();
 }
