@@ -1,22 +1,119 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-  <title>SSP Login</title>
+<meta charset="UTF-8">
+<title>Shadow Sites Plus</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" href="SSP.png">
+
+<style>
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: black;
+  font-family: Arial, sans-serif;
+  color: #e0c3fc;
+  overflow: hidden;
+}
+
+@keyframes pulse {
+  0% { text-shadow: 0 0 5px #9b59b6; }
+  100% { text-shadow: 0 0 20px #d580ff; }
+}
+
+/* CENTER AUTH BOX */
+#authBox {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.panel {
+  width: 320px;
+  padding: 25px;
+  background: rgba(0,0,0,0.85);
+  border: 2px solid #9b59b6;
+  border-radius: 12px;
+  box-shadow: 0 0 25px #8e44ad;
+  text-align: center;
+}
+
+.panel h2 {
+  margin-top: 0;
+  animation: pulse 2s infinite alternate;
+}
+
+input {
+  width: 100%;
+  padding: 10px;
+  margin: 8px 0;
+  background: black;
+  border: 1px solid #9b59b6;
+  border-radius: 6px;
+  color: white;
+}
+
+button {
+  margin-top: 10px;
+  width: 100%;
+  padding: 10px;
+  font-weight: bold;
+  border-radius: 8px;
+  cursor: pointer;
+  border: 2px solid #9b59b6;
+  background: linear-gradient(45deg, #9b59b6, #8e44ad);
+  color: white;
+  box-shadow: 0 0 15px #9b59b6;
+}
+
+.switch {
+  margin-top: 10px;
+  background: none;
+  border: none;
+  color: #a970ff;
+  cursor: pointer;
+}
+
+#msg {
+  margin-top: 10px;
+  color: #ff6b6b;
+}
+
+/* hide signup by default */
+#signupPanel { display: none; }
+</style>
 </head>
+
 <body>
-  <h2>Login</h2>
-  <input id="user" placeholder="Username">
-  <input id="pass" type="password" placeholder="Password">
-  <button onclick="login()">Login</button>
 
-  <h2>Sign Up</h2>
-  <input id="su_user" placeholder="Username">
-  <input id="su_email" placeholder="Email">
-  <input id="su_pass" type="password" placeholder="Password">
-  <button onclick="signup()">Sign Up</button>
+<div id="authBox">
 
-  <p id="msg"></p>
+  <!-- LOGIN -->
+  <div class="panel" id="loginPanel">
+    <h2>SSP Login</h2>
+    <input id="loginUser" placeholder="Username">
+    <input id="loginPass" type="password" placeholder="Password">
+    <button onclick="login()">Login</button>
+    <button class="switch" onclick="showSignup()">Create account</button>
+    <div id="msg"></div>
+  </div>
 
-  <script src="auth.js"></script>
+  <!-- SIGNUP -->
+  <div class="panel" id="signupPanel">
+    <h2>SSP Sign Up</h2>
+    <input id="suUser" placeholder="Username">
+    <input id="suEmail" placeholder="Email">
+    <input id="suPass" type="password" placeholder="Password">
+    <button onclick="signup()">Sign Up</button>
+    <button class="switch" onclick="showLogin()">Back to login</button>
+    <div id="msg2"></div>
+  </div>
+
+</div>
+
+<script src="auth.js"></script>
 </body>
 </html>
