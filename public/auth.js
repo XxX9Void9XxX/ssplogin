@@ -1,8 +1,15 @@
+const loginPanel = document.getElementById("loginPanel");
+const signupPanel = document.getElementById("signupPanel");
+const authBox = document.getElementById("authBox");
+const app = document.getElementById("app");
+const msg = document.getElementById("msg");
+const msg2 = document.getElementById("msg2");
+
 function showSignup(){ loginPanel.style.display="none"; signupPanel.style.display="block"; }
 function showLogin(){ signupPanel.style.display="none"; loginPanel.style.display="block"; }
 function enterApp(){ authBox.style.display="none"; app.style.display="block"; }
 
-/* CHECK IF USER ALREADY LOGGED IN */
+/* CHECK SESSION */
 async function checkSession(){
   const res = await fetch("/api/me");
   const data = await res.json();
