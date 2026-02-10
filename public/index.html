@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Shadow Sites Plus</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <link rel="icon" href="SSP.png">
+  <link rel="stylesheet" href="style.css">
+</head>
+
+<body>
+
+<div id="authOverlay">
+  <div class="authBox">
+    <h2 id="authTitle">Login</h2>
+
+    <input id="username" placeholder="Username">
+    <input id="email" placeholder="Email" style="display:none;">
+    <input id="password" type="password" placeholder="Password">
+
+    <button id="authBtn">Login</button>
+
+    <p class="switch" id="switchMode">Create an account</p>
+    <p id="authError"></p>
+  </div>
+</div>
+
+<div id="siteContent" style="display:none;">
+  <h1>Shadow Sites Plus</h1>
+  <p>Welcome — you are logged in.</p>
+</div>
+
+<script src="auth.js"></script>
+</body>
+</html>
