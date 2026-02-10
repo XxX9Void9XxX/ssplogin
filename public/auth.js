@@ -8,6 +8,13 @@ function showLogin() {
   loginPanel.style.display = "block";
 }
 
+function enterApp(role) {
+  localStorage.setItem("role", role);
+
+  authBox.style.display = "none";
+  app.style.display = "block";
+}
+
 /* LOGIN */
 async function login() {
   const res = await fetch("/api/login", {
@@ -23,8 +30,7 @@ async function login() {
   msg.textContent = data.message || "";
 
   if (data.success) {
-    localStorage.setItem("role", data.role);
-    location.href = "/success.html";
+    enterApp(data.role);
   }
 }
 
@@ -42,4 +48,9 @@ async function signup() {
 
   const data = await res.json();
   msg2.textContent = data.message || "Account created!";
+}
+
+/* AUTO-LOGIN (optional) */
+if (localStorage.getItem("role")) {
+  enterApp(localStorage.getItem("role"));
 }
