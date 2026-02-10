@@ -1,10 +1,21 @@
+function showSignup() {
+  loginPanel.style.display = "none";
+  signupPanel.style.display = "block";
+}
+
+function showLogin() {
+  signupPanel.style.display = "none";
+  loginPanel.style.display = "block";
+}
+
+/* LOGIN */
 async function login() {
   const res = await fetch("/api/login", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      username: user.value,
-      password: pass.value
+      username: loginUser.value,
+      password: loginPass.value
     })
   });
 
@@ -13,21 +24,22 @@ async function login() {
 
   if (data.success) {
     localStorage.setItem("role", data.role);
-    window.location.href = "/success.html";
+    location.href = "/success.html";
   }
 }
 
+/* SIGNUP */
 async function signup() {
   const res = await fetch("/api/signup", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      username: su_user.value,
-      email: su_email.value,
-      password: su_pass.value
+      username: suUser.value,
+      email: suEmail.value,
+      password: suPass.value
     })
   });
 
   const data = await res.json();
-  msg.textContent = data.message || "Account created";
+  msg2.textContent = data.message || "Account created!";
 }
