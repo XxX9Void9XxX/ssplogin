@@ -1,14 +1,19 @@
 import express from "express";
 import bcrypt from "bcrypt";
 import sqlite3 from "sqlite3";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 app.use(express.json());
-app.use(express.static("public"));
+app.use(express.static(path.join(__dirname, "../public")));
 
 const db = new sqlite3.Database("./users.db");
 
-// ===== DATABASE =====
+/* ---------- DATABASE ---------- */
 db.run(`
 CREATE TABLE IF NOT EXISTS users (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -21,7 +26,13 @@ CREATE TABLE IF NOT EXISTS users (
 )
 `);
 
-// ===== SIGN UP =====
+/* 🔐 ONE-TIME ADMIN SETUP (DELETE AFTER USE)
+db.run(
+  "UPDATE users SET role = 'admin' WHERE username = 'YOUR_USERNAME'"
+);
+*/
+
+/* ---------- SIGNUP ---------- */
 app.post("/api/signup", async (req, res) => {
   const { username, email, password } = req.body;
   if (!username || !email || !password)
@@ -34,13 +45,13 @@ app.post("/api/signup", async (req, res) => {
     [username, email, hash],
     err => {
       if (err)
-        return res.json({ success: false, message: "Username already exists" });
+        return res.json({ success: false, message: "Username exists" });
       res.json({ success: true });
     }
   );
 });
 
-// ===== LOGIN =====
+/* ---------- LOGIN ---------- */
 app.post("/api/login", (req, res) => {
   const { username, password } = req.body;
 
@@ -52,7 +63,7 @@ app.post("/api/login", (req, res) => {
         return res.json({ success: false, message: "User not found" });
 
       if (user.banned)
-        return res.json({ success: false, message: "You are banned" });
+        return res.json({ success: false, message: "Account banned" });
 
       const valid = await bcrypt.compare(password, user.password);
       if (!valid)
@@ -65,52 +76,37 @@ app.post("/api/login", (req, res) => {
 
       res.json({
         success: true,
-        role: user.role,
-        username: user.username
+        username: user.username,
+        role: user.role
       });
     }
   );
 });
 
-// ===== ADMIN: GET USERS =====
+/* ---------- ADMIN: LIST USERS ---------- */
 app.get("/api/admin/users", (req, res) => {
+  if (req.query.admin !== "true") return res.sendStatus(403);
+
   db.all(
-    "SELECT username, role, banned, last_login FROM users",
+    "SELECT id, username, role, banned, last_login FROM users",
     [],
     (err, rows) => res.json(rows)
   );
 });
 
-// ===== ADMIN: BAN / UNBAN =====
+/* ---------- ADMIN: BAN / UNBAN ---------- */
 app.post("/api/admin/ban", (req, res) => {
-  const { username, banned } = req.body;
+  const { admin, userId, banned } = req.body;
+  if (!admin) return res.sendStatus(403);
+
   db.run(
-    "UPDATE users SET banned = ? WHERE username = ?",
-    [banned ? 1 : 0, username],
+    "UPDATE users SET banned = ? WHERE id = ?",
+    [banned ? 1 : 0, userId],
     () => res.json({ success: true })
   );
 });
 
-// ===== ADMIN: PROMOTE / DEMOTE =====
-app.post("/api/admin/role", (req, res) => {
-  const { username, role } = req.body;
-
-  if (!["user", "admin"].includes(role)) {
-    return res.json({ success: false });
-  }
-
-  db.run(
-    "UPDATE users SET role = ? WHERE username = ?",
-    [role, username],
-    () => res.json({ success: true })
-  );
-});
-
-// ===== FALLBACK =====
-app.get("*", (req, res) => {
-  res.sendFile(process.cwd() + "/public/index.html");
-});
-
+/* ---------- START ---------- */
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () =>
   console.log("SSP Auth running on port", PORT)
