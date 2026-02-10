@@ -4,28 +4,28 @@ import sqlite3 from "sqlite3";
 
 const app = express();
 app.use(express.json());
-
-// ✅ FIXED STATIC SERVING (Render-safe)
 app.use(express.static("public"));
 
 const db = new sqlite3.Database("./users.db");
 
-// ✅ CREATE TABLE
+// ===== DATABASE =====
 db.run(`
 CREATE TABLE IF NOT EXISTS users (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   username TEXT UNIQUE,
   email TEXT,
-  password TEXT
+  password TEXT,
+  role TEXT DEFAULT 'user',
+  banned INTEGER DEFAULT 0,
+  last_login INTEGER
 )
 `);
 
-// ✅ SIGN UP
+// ===== SIGN UP =====
 app.post("/api/signup", async (req, res) => {
   const { username, email, password } = req.body;
-  if (!username || !email || !password) {
+  if (!username || !email || !password)
     return res.json({ success: false, message: "Missing fields" });
-  }
 
   const hash = await bcrypt.hash(password, 10);
 
@@ -33,15 +33,15 @@ app.post("/api/signup", async (req, res) => {
     "INSERT INTO users (username, email, password) VALUES (?,?,?)",
     [username, email, hash],
     err => {
-      if (err) {
+      if (err)
         return res.json({ success: false, message: "Username already exists" });
-      }
+
       res.json({ success: true });
     }
   );
 });
 
-// ✅ LOGIN
+// ===== LOGIN =====
 app.post("/api/login", (req, res) => {
   const { username, password } = req.body;
 
@@ -49,26 +49,49 @@ app.post("/api/login", (req, res) => {
     "SELECT * FROM users WHERE username = ?",
     [username],
     async (err, user) => {
-      if (!user) {
+      if (!user)
         return res.json({ success: false, message: "User not found" });
-      }
+
+      if (user.banned)
+        return res.json({ success: false, message: "You are banned" });
 
       const valid = await bcrypt.compare(password, user.password);
-      if (!valid) {
+      if (!valid)
         return res.json({ success: false, message: "Wrong password" });
-      }
 
-      res.json({ success: true });
+      db.run(
+        "UPDATE users SET last_login = ? WHERE id = ?",
+        [Date.now(), user.id]
+      );
+
+      res.json({ success: true, role: user.role });
     }
   );
 });
 
-// ✅ FORCE INDEX.HTML
+// ===== ADMIN: GET USERS =====
+app.get("/api/admin/users", (req, res) => {
+  db.all(
+    "SELECT username, role, banned, last_login FROM users",
+    [],
+    (err, rows) => res.json(rows)
+  );
+});
+
+// ===== ADMIN: BAN / UNBAN =====
+app.post("/api/admin/ban", (req, res) => {
+  const { username, banned } = req.body;
+  db.run(
+    "UPDATE users SET banned = ? WHERE username = ?",
+    [banned ? 1 : 0, username],
+    () => res.json({ success: true })
+  );
+});
+
+// ===== FALLBACK =====
 app.get("*", (req, res) => {
   res.sendFile(process.cwd() + "/public/index.html");
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log("SSP Auth running on port", PORT);
-});
+app.listen(PORT, () => console.log("SSP Auth running on", PORT));
