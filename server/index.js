@@ -12,7 +12,7 @@ const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "../public")));
 
-/* SESSION */
+/* ---------- SESSIONS ---------- */
 app.use(session({
   secret: 'SUPER_SECRET_KEY_CHANGE_THIS',
   resave: false,
@@ -20,6 +20,7 @@ app.use(session({
   cookie: { maxAge: 1000 * 60 * 60 * 24 * 30 } // 30 days
 }));
 
+/* ---------- DATABASE ---------- */
 const db = new sqlite3.Database("./users.db");
 
 db.run(`
@@ -64,7 +65,7 @@ app.post("/api/login", (req, res) => {
     const valid = await bcrypt.compare(password, user.password);
     if (!valid) return res.json({ success: false, message: "Wrong password" });
 
-    req.session.userId = user.id;          // store session
+    req.session.userId = user.id;
     req.session.role = user.role;
 
     db.run("UPDATE users SET last_login = ? WHERE id = ?", [Date.now(), user.id]);
@@ -88,7 +89,7 @@ app.post("/api/logout", (req, res) => {
   res.json({ success: true });
 });
 
-/* ---------- ADMIN USERS ---------- */
+/* ---------- ADMIN: LIST USERS ---------- */
 app.get("/api/admin/users", (req, res) => {
   if (!req.session.role || req.session.role !== 'admin') return res.sendStatus(403);
 
@@ -97,12 +98,19 @@ app.get("/api/admin/users", (req, res) => {
   });
 });
 
+/* ---------- ADMIN: BAN / UNBAN ---------- */
 app.post("/api/admin/ban", (req, res) => {
   if (!req.session.role || req.session.role !== 'admin') return res.sendStatus(403);
 
   const { userId, banned } = req.body;
   db.run("UPDATE users SET banned = ? WHERE id = ?", [banned ? 1 : 0, userId], () => res.json({ success: true }));
 });
+
+/* ---------- MAKE INITIAL ADMIN (one-time) ---------- */
+db.run(
+  "UPDATE users SET role = 'admin' WHERE username = ?",
+  ["admin"]
+);
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log("SSP Auth running on port", PORT));
