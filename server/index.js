@@ -35,7 +35,6 @@ app.post("/api/signup", async (req, res) => {
     err => {
       if (err)
         return res.json({ success: false, message: "Username already exists" });
-
       res.json({ success: true });
     }
   );
@@ -64,7 +63,11 @@ app.post("/api/login", (req, res) => {
         [Date.now(), user.id]
       );
 
-      res.json({ success: true, role: user.role });
+      res.json({
+        success: true,
+        role: user.role,
+        username: user.username
+      });
     }
   );
 });
@@ -88,10 +91,27 @@ app.post("/api/admin/ban", (req, res) => {
   );
 });
 
+// ===== ADMIN: PROMOTE / DEMOTE =====
+app.post("/api/admin/role", (req, res) => {
+  const { username, role } = req.body;
+
+  if (!["user", "admin"].includes(role)) {
+    return res.json({ success: false });
+  }
+
+  db.run(
+    "UPDATE users SET role = ? WHERE username = ?",
+    [role, username],
+    () => res.json({ success: true })
+  );
+});
+
 // ===== FALLBACK =====
 app.get("*", (req, res) => {
   res.sendFile(process.cwd() + "/public/index.html");
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log("SSP Auth running on", PORT));
+app.listen(PORT, () =>
+  console.log("SSP Auth running on port", PORT)
+);
