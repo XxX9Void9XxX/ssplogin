@@ -43,3 +43,4 @@ async function signup() {
   const data = await res.json();
   msg2.textContent = data.message || "Account created!";
 }
+
