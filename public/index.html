@@ -22,13 +22,15 @@ body {
   100% { text-shadow: 0 0 20px #d580ff; }
 }
 
-/* CENTER AUTH BOX */
+/* AUTH OVERLAY */
 #authBox {
-  position: absolute;
+  position: fixed;
   inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
+  background: black;
+  z-index: 10;
 }
 
 .panel {
@@ -77,21 +79,33 @@ button {
   cursor: pointer;
 }
 
-#msg {
+#msg, #msg2 {
   margin-top: 10px;
   color: #ff6b6b;
 }
 
-/* hide signup by default */
+/* SIGNUP HIDDEN */
 #signupPanel { display: none; }
+
+/* MAIN APP (IFRAME) */
+#app {
+  position: fixed;
+  inset: 0;
+  display: none;
+}
+
+#app iframe {
+  width: 100vw;
+  height: 100vh;
+  border: none;
+}
 </style>
 </head>
 
 <body>
 
+<!-- AUTH -->
 <div id="authBox">
-
-  <!-- LOGIN -->
   <div class="panel" id="loginPanel">
     <h2>SSP Login</h2>
     <input id="loginUser" placeholder="Username">
@@ -101,7 +115,6 @@ button {
     <div id="msg"></div>
   </div>
 
-  <!-- SIGNUP -->
   <div class="panel" id="signupPanel">
     <h2>SSP Sign Up</h2>
     <input id="suUser" placeholder="Username">
@@ -111,7 +124,14 @@ button {
     <button class="switch" onclick="showLogin()">Back to login</button>
     <div id="msg2"></div>
   </div>
+</div>
 
+<!-- APP -->
+<div id="app">
+  <iframe
+    src="https://sspv2play.neocities.org/home"
+    allowfullscreen
+  ></iframe>
 </div>
 
 <script src="auth.js"></script>
