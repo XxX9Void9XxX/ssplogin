@@ -2,7 +2,6 @@
   "name": "ssp-auth",
   "version": "1.0.0",
   "type": "module",
-  "main": "index.js",
   "dependencies": {
     "express": "^4.19.2",
     "bcrypt": "^5.1.0",
