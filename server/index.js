@@ -1,18 +1,16 @@
 import express from "express";
 import bcrypt from "bcrypt";
 import sqlite3 from "sqlite3";
-import path from "path";
-import { fileURLToPath } from "url";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 const app = express();
 app.use(express.json());
-app.use(express.static(path.join(__dirname, "../public")));
+
+// ✅ FIXED STATIC SERVING (Render-safe)
+app.use(express.static("public"));
 
 const db = new sqlite3.Database("./users.db");
 
+// ✅ CREATE TABLE
 db.run(`
 CREATE TABLE IF NOT EXISTS users (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -22,10 +20,12 @@ CREATE TABLE IF NOT EXISTS users (
 )
 `);
 
+// ✅ SIGN UP
 app.post("/api/signup", async (req, res) => {
   const { username, email, password } = req.body;
-  if (!username || !email || !password)
+  if (!username || !email || !password) {
     return res.json({ success: false, message: "Missing fields" });
+  }
 
   const hash = await bcrypt.hash(password, 10);
 
@@ -41,6 +41,7 @@ app.post("/api/signup", async (req, res) => {
   );
 });
 
+// ✅ LOGIN
 app.post("/api/login", (req, res) => {
   const { username, password } = req.body;
 
@@ -62,5 +63,12 @@ app.post("/api/login", (req, res) => {
   );
 });
 
+// ✅ FORCE INDEX.HTML
+app.get("*", (req, res) => {
+  res.sendFile(process.cwd() + "/public/index.html");
+});
+
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log("SSP Auth running on port", PORT));
+app.listen(PORT, () => {
+  console.log("SSP Auth running on port", PORT);
+});
