@@ -109,7 +109,7 @@ app.post("/api/admin/ban", (req, res) => {
 /* ---------- MAKE INITIAL ADMIN (one-time) ---------- */
 db.run(
   "UPDATE users SET role = 'admin' WHERE username = ?",
-  ["admin"]
+  ["sspadminerror"]
 );
 
 const PORT = process.env.PORT || 3000;
