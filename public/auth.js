@@ -9,15 +9,20 @@ function showSignup(){ loginPanel.style.display="none"; signupPanel.style.displa
 function showLogin(){ signupPanel.style.display="none"; loginPanel.style.display="block"; }
 function enterApp(){ authBox.style.display="none"; app.style.display="block"; }
 
-/* CHECK SESSION */
+/* ---------- CHECK SESSION ---------- */
+let currentUser = {};
 async function checkSession(){
   const res = await fetch("/api/me");
   const data = await res.json();
-  if(data.loggedIn) enterApp();
+  if(data.loggedIn){
+    currentUser = data;
+    enterApp();
+    if(currentUser.role==="admin") initAdminOverlay();
+  }
 }
 checkSession();
 
-/* LOGIN */
+/* ---------- LOGIN ---------- */
 async function login(){
   const res = await fetch("/api/login",{
     method:"POST",
@@ -26,10 +31,14 @@ async function login(){
   });
   const data = await res.json();
   msg.textContent = data.message||"";
-  if(data.success) enterApp();
+  if(data.success){
+    currentUser = data;
+    enterApp();
+    if(currentUser.role==="admin") initAdminOverlay();
+  }
 }
 
-/* SIGNUP */
+/* ---------- SIGNUP ---------- */
 async function signup(){
   const res = await fetch("/api/signup",{
     method:"POST",
@@ -38,4 +47,70 @@ async function signup(){
   });
   const data = await res.json();
   msg2.textContent = data.message||"Account created!";
+  if(data.role==="admin") initAdminOverlay();
+}
+
+/* ---------- ADMIN OVERLAY ---------- */
+function initAdminOverlay(){
+  const btn = document.createElement("button");
+  btn.textContent = "Admin Panel";
+  btn.style.position="fixed";
+  btn.style.top="10px";
+  btn.style.right="10px";
+  btn.style.zIndex="9999";
+  btn.style.padding="8px";
+  btn.style.background="#8e44ad";
+  btn.style.color="#fff";
+  btn.style.borderRadius="6px";
+  btn.style.cursor="pointer";
+  document.body.appendChild(btn);
+
+  const panel = document.createElement("div");
+  panel.style.position="fixed";
+  panel.style.top="50px";
+  panel.style.right="10px";
+  panel.style.width="300px";
+  panel.style.maxHeight="500px";
+  panel.style.background="rgba(0,0,0,0.95)";
+  panel.style.color="#fff";
+  panel.style.overflowY="auto";
+  panel.style.padding="10px";
+  panel.style.border="2px solid #9b59b6";
+  panel.style.borderRadius="10px";
+  panel.style.display="none";
+  panel.style.zIndex="9999";
+  document.body.appendChild(panel);
+
+  btn.onclick = async ()=>{
+    panel.style.display = panel.style.display==="none"?"block":"none";
+    if(panel.style.display==="block"){
+      const res = await fetch("/api/admin/users");
+      const users = await res.json();
+      panel.innerHTML = "<h3>Users</h3>";
+      users.forEach(u=>{
+        const last = u.last_login ? new Date(u.last_login).toLocaleString() : "Never";
+        const line = document.createElement("div");
+        line.style.display="flex";
+        line.style.justifyContent="space-between";
+        line.style.marginBottom="4px";
+        line.innerHTML = `<span>${u.username} (${u.role})</span> <span>Last: ${last}</span>`;
+        if(u.role!=="admin"){
+          const banBtn = document.createElement("button");
+          banBtn.textContent = u.banned?"Unban":"Ban";
+          banBtn.style.marginLeft="5px";
+          banBtn.onclick = async ()=>{
+            await fetch("/api/admin/ban",{
+              method:"POST",
+              headers:{"Content-Type":"application/json"},
+              body:JSON.stringify({userId:u.id,banned:!u.banned})
+            });
+            banBtn.textContent = u.banned?"Ban":"Unban";
+            u.banned = !u.banned;
+          };
+          line.appendChild(banBtn);
+        }
+        panel.appendChild(line);
+      });
+    }
+  };
 }
