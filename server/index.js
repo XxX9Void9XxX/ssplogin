@@ -12,7 +12,7 @@ const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "../public")));
 
-/* ---------- SESSIONS ---------- */
+/* ---------- SESSION ---------- */
 app.use(session({
   secret: 'SUPER_SECRET_KEY_CHANGE_THIS',
   resave: false,
@@ -21,19 +21,43 @@ app.use(session({
 }));
 
 /* ---------- DATABASE ---------- */
-const db = new sqlite3.Database("./users.db");
+const dbPath = path.join(__dirname, "users.db");
+const db = new sqlite3.Database(dbPath, (err) => {
+  if (err) {
+    console.error("Error opening database:", err.message);
+    process.exit(1);
+  } else {
+    console.log("Database opened at", dbPath);
+  }
+});
 
-db.run(`
-CREATE TABLE IF NOT EXISTS users (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  username TEXT UNIQUE,
-  email TEXT,
-  password TEXT,
-  role TEXT DEFAULT 'user',
-  banned INTEGER DEFAULT 0,
-  last_login INTEGER
-)
-`);
+/* ---------- CREATE TABLE ---------- */
+db.serialize(() => {
+  db.run(`
+    CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT UNIQUE,
+      email TEXT,
+      password TEXT,
+      role TEXT DEFAULT 'user',
+      banned INTEGER DEFAULT 0,
+      last_login INTEGER
+    )
+  `, (err) => {
+    if (err) console.error("Table creation failed:", err.message);
+    else console.log("Table 'users' ready.");
+
+    // Optional: make initial admin safely after table exists
+    db.run(
+      "UPDATE users SET role = 'admin' WHERE username = ?",
+      ["admin"],
+      (err2) => {
+        if(err2) console.error("Initial admin setup failed:", err2.message);
+        else console.log("Initial admin setup done (if user exists).");
+      }
+    );
+  });
+});
 
 /* ---------- SIGNUP ---------- */
 app.post("/api/signup", async (req, res) => {
@@ -46,9 +70,8 @@ app.post("/api/signup", async (req, res) => {
   db.run(
     "INSERT INTO users (username, email, password) VALUES (?,?,?)",
     [username, email, hash],
-    err => {
-      if (err)
-        return res.json({ success: false, message: "Username exists" });
+    (err) => {
+      if (err) return res.json({ success: false, message: "Username exists" });
       res.json({ success: true });
     }
   );
@@ -73,7 +96,7 @@ app.post("/api/login", (req, res) => {
   });
 });
 
-/* ---------- GET CURRENT USER ---------- */
+/* ---------- CURRENT USER ---------- */
 app.get("/api/me", (req, res) => {
   if (!req.session.userId) return res.json({ loggedIn: false });
 
@@ -89,7 +112,7 @@ app.post("/api/logout", (req, res) => {
   res.json({ success: true });
 });
 
-/* ---------- ADMIN: LIST USERS ---------- */
+/* ---------- ADMIN USERS ---------- */
 app.get("/api/admin/users", (req, res) => {
   if (!req.session.role || req.session.role !== 'admin') return res.sendStatus(403);
 
@@ -98,7 +121,7 @@ app.get("/api/admin/users", (req, res) => {
   });
 });
 
-/* ---------- ADMIN: BAN / UNBAN ---------- */
+/* ---------- ADMIN BAN/UNBAN ---------- */
 app.post("/api/admin/ban", (req, res) => {
   if (!req.session.role || req.session.role !== 'admin') return res.sendStatus(403);
 
@@ -106,11 +129,6 @@ app.post("/api/admin/ban", (req, res) => {
   db.run("UPDATE users SET banned = ? WHERE id = ?", [banned ? 1 : 0, userId], () => res.json({ success: true }));
 });
 
-/* ---------- MAKE INITIAL ADMIN (one-time) ---------- */
-db.run(
-  "UPDATE users SET role = 'admin' WHERE username = ?",
-  ["sspadminerror"]
-);
-
+/* ---------- START SERVER ---------- */
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log("SSP Auth running on port", PORT));
