@@ -12,7 +12,7 @@ const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "../public")));
 
-/* ---------- SESSION ---------- */
+/* ---------- SESSIONS ---------- */
 app.use(session({
   secret: 'SUPER_SECRET_KEY_CHANGE_THIS',
   resave: false,
@@ -44,10 +44,13 @@ db.serialize(() => {
       last_login INTEGER
     )
   `, (err) => {
-    if (err) console.error("Table creation failed:", err.message);
-    else console.log("Table 'users' ready.");
+    if (err) {
+      console.error("Table creation failed:", err.message);
+      process.exit(1);
+    }
+    console.log("Table 'users' ready.");
 
-    // Optional: make initial admin safely after table exists
+    // Make initial admin safely (only if user exists)
     db.run(
       "UPDATE users SET role = 'admin' WHERE username = ?",
       ["admin"],
@@ -112,7 +115,7 @@ app.post("/api/logout", (req, res) => {
   res.json({ success: true });
 });
 
-/* ---------- ADMIN USERS ---------- */
+/* ---------- ADMIN: LIST USERS ---------- */
 app.get("/api/admin/users", (req, res) => {
   if (!req.session.role || req.session.role !== 'admin') return res.sendStatus(403);
 
@@ -121,7 +124,7 @@ app.get("/api/admin/users", (req, res) => {
   });
 });
 
-/* ---------- ADMIN BAN/UNBAN ---------- */
+/* ---------- ADMIN: BAN / UNBAN ---------- */
 app.post("/api/admin/ban", (req, res) => {
   if (!req.session.role || req.session.role !== 'admin') return res.sendStatus(403);
 
