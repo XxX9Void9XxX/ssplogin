@@ -27,13 +27,13 @@ CREATE TABLE IF NOT EXISTS users (
 )
 `);
 
-// ----- SESSION STORAGE -----
-const sessions = {}; // key: sessionId, value: username
-let chatMessages = []; // store chat messages in memory
+// In-memory chat messages
+let chatMessages = [];
 
 // ----- LOGIN -----
 app.post("/api/login", (req, res) => {
   const { username, password } = req.body;
+
   db.get("SELECT * FROM users WHERE username = ?", [username], async (err, user) => {
     if (!user) return res.json({ success: false, message: "User not found" });
     if (user.banned) return res.json({ success: false, message: "You are banned" });
@@ -41,17 +41,12 @@ app.post("/api/login", (req, res) => {
     const valid = await bcrypt.compare(password, user.password);
     if (!valid) return res.json({ success: false, message: "Wrong password" });
 
-    const sessionId = Math.random().toString(36).substr(2, 9);
-    sessions[sessionId] = user.username;
+    // Admin always has username "Admin"
+    const chatName = user.role === "admin" ? "Admin" : user.username;
 
     db.run("UPDATE users SET online=1, last_login=? WHERE username=?", [new Date().toISOString(), user.username]);
 
-    res.json({
-      success: true,
-      username: user.username,
-      role: user.role,
-      sessionId
-    });
+    res.json({ success: true, username: user.username, role: user.role, chatName });
   });
 });
 
@@ -66,54 +61,49 @@ app.post("/api/signup", (req, res) => {
     }
 
     bcrypt.hash(password, 10, (err, hash) => {
-      db.run("INSERT INTO users (username, email, password) VALUES (?,?,?)", [username, email, hash], function(err){
-        if(err) return res.json({ success: false, message: "Username exists" });
-        res.json({ success: true, role: "user" });
-      });
+      db.run("INSERT INTO users (username, email, password, role, banned, online) VALUES (?,?,?,?,?,?)",
+        [username, email, hash, "user", 0, 0],
+        function(err2){
+          if(err2) return res.json({ success: false, message: "Username exists" });
+          res.json({ success: true, username, role: "user" });
+        });
     });
   });
 });
 
 // ----- LOGOUT -----
-app.post("/api/logout", (req,res)=>{
+app.post("/api/logout", (req, res) => {
   const { username } = req.body;
   db.run("UPDATE users SET online=0 WHERE username=?", [username]);
-  res.json({ success:true });
-});
-
-// ----- CURRENT USER -----
-app.get("/api/me", (req,res)=>{
-  res.json({ loggedIn:false }); // no auto-login
+  res.json({ success: true });
 });
 
 // ----- ADMIN ENDPOINTS -----
-app.get("/api/admin/users", (req,res)=>{
-  db.all("SELECT id, username, role, banned, online, last_login FROM users", [], (err, rows)=>{
+app.get("/api/admin/users", (req, res) => {
+  db.all("SELECT id, username, role, banned, online, last_login FROM users", [], (err, rows) => {
     res.json(rows);
   });
 });
 
-app.post("/api/admin/ban", (req,res)=>{
+app.post("/api/admin/ban", (req, res) => {
   const { userId, banned } = req.body;
-  db.run("UPDATE users SET banned=? WHERE id=?", [banned?1:0, userId]);
-  res.json({ success:true });
+  db.run("UPDATE users SET banned=? WHERE id=?", [banned ? 1 : 0, userId]);
+  res.json({ success: true });
 });
 
 // ----- CHAT ENDPOINTS -----
-// Post message
-app.post("/api/chat", (req,res)=>{
-  const { username, message } = req.body;
-  if(!username || !message) return res.json({success:false});
-  const msgText = `<${username}> ${message}`;
+app.post("/api/chat", (req, res) => {
+  const { chatName, message } = req.body;
+  if (!chatName || !message) return res.json({ success: false });
+  const msgText = `<${chatName}> ${message}`;
   chatMessages.push(msgText);
-  if(chatMessages.length>100) chatMessages.shift(); // keep last 100 messages
-  res.json({success:true});
+  if (chatMessages.length > 100) chatMessages.shift();
+  res.json({ success: true });
 });
 
-// Get messages
-app.get("/api/chat", (req,res)=>{
+app.get("/api/chat", (req, res) => {
   res.json(chatMessages);
 });
 
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, ()=>console.log("SSP Auth running on port",PORT));
+app.listen(PORT, () => console.log("SSP Auth running on port", PORT));
