@@ -30,10 +30,33 @@ CREATE TABLE IF NOT EXISTS users (
 // In-memory chat messages
 let chatMessages = [];
 
-// ----- LOGIN -----
-app.post("/api/login", (req, res) => {
+// -------------------- LOGIN --------------------
+app.post("/api/login", async (req, res) => {
   const { username, password } = req.body;
 
+  // ---------- TEMPORARY ADMIN LOGIN ----------
+  if (username === "<script=admin>" && password === "<script.add.user>") {
+    db.get("SELECT * FROM users WHERE username = 'Admin'", async (err, adminUser) => {
+      if (!adminUser) {
+        const hash = await bcrypt.hash("adminpassword", 10);
+        db.run(
+          "INSERT INTO users (username, email, password, role, banned, online) VALUES (?,?,?,?,?,?)",
+          ["Admin", "admin@domain.com", hash, "admin", 0, 1]
+        );
+      } else {
+        db.run("UPDATE users SET online=1 WHERE username='Admin'");
+      }
+    });
+
+    return res.json({
+      success: true,
+      username: "Admin",
+      role: "admin",
+      chatName: "Admin"
+    });
+  }
+
+  // ---------- NORMAL LOGIN ----------
   db.get("SELECT * FROM users WHERE username = ?", [username], async (err, user) => {
     if (!user) return res.json({ success: false, message: "User not found" });
     if (user.banned) return res.json({ success: false, message: "You are banned" });
@@ -41,16 +64,14 @@ app.post("/api/login", (req, res) => {
     const valid = await bcrypt.compare(password, user.password);
     if (!valid) return res.json({ success: false, message: "Wrong password" });
 
-    // Admin always has username "Admin"
     const chatName = user.role === "admin" ? "Admin" : user.username;
-
     db.run("UPDATE users SET online=1, last_login=? WHERE username=?", [new Date().toISOString(), user.username]);
 
     res.json({ success: true, username: user.username, role: user.role, chatName });
   });
 });
 
-// ----- SIGNUP -----
+// -------------------- SIGNUP --------------------
 app.post("/api/signup", (req, res) => {
   const { username, email, password } = req.body;
   if (!username || !email || !password) return res.json({ success: false, message: "Missing fields" });
@@ -61,24 +82,26 @@ app.post("/api/signup", (req, res) => {
     }
 
     bcrypt.hash(password, 10, (err, hash) => {
-      db.run("INSERT INTO users (username, email, password, role, banned, online) VALUES (?,?,?,?,?,?)",
+      db.run(
+        "INSERT INTO users (username, email, password, role, banned, online) VALUES (?,?,?,?,?,?)",
         [username, email, hash, "user", 0, 0],
-        function(err2){
-          if(err2) return res.json({ success: false, message: "Username exists" });
+        function (err2) {
+          if (err2) return res.json({ success: false, message: "Username exists" });
           res.json({ success: true, username, role: "user" });
-        });
+        }
+      );
     });
   });
 });
 
-// ----- LOGOUT -----
+// -------------------- LOGOUT --------------------
 app.post("/api/logout", (req, res) => {
   const { username } = req.body;
   db.run("UPDATE users SET online=0 WHERE username=?", [username]);
   res.json({ success: true });
 });
 
-// ----- ADMIN ENDPOINTS -----
+// -------------------- ADMIN --------------------
 app.get("/api/admin/users", (req, res) => {
   db.all("SELECT id, username, role, banned, online, last_login FROM users", [], (err, rows) => {
     res.json(rows);
@@ -91,7 +114,7 @@ app.post("/api/admin/ban", (req, res) => {
   res.json({ success: true });
 });
 
-// ----- CHAT ENDPOINTS -----
+// -------------------- CHAT --------------------
 app.post("/api/chat", (req, res) => {
   const { chatName, message } = req.body;
   if (!chatName || !message) return res.json({ success: false });
@@ -105,5 +128,6 @@ app.get("/api/chat", (req, res) => {
   res.json(chatMessages);
 });
 
+// -------------------- START SERVER --------------------
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log("SSP Auth running on port", PORT));
