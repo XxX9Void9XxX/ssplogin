@@ -35,7 +35,7 @@ app.post("/api/login", async (req, res) => {
   const { username, password } = req.body;
 
   // ---------- TEMPORARY ADMIN LOGIN ----------
-  if (username === "<script=admin>" && password === "<script.add.user>") {
+  if (username === "a" && password === "a") {
     db.get("SELECT * FROM users WHERE username = 'Admin'", async (err, adminUser) => {
       if (!adminUser) {
         const hash = await bcrypt.hash("adminpassword", 10);
