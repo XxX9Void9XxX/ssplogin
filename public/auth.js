@@ -4,8 +4,6 @@ const signupPanel = document.getElementById("signupPanel");
 const authBox = document.getElementById("authBox");
 const appDiv = document.getElementById("app");
 const contentFrame = document.getElementById("contentFrame");
-const msg = document.getElementById("msg");
-const msg2 = document.getElementById("msg2");
 
 /* ---------- SWITCH PANELS ---------- */
 function showSignup() { loginPanel.style.display = "none"; signupPanel.style.display = "block"; }
@@ -53,7 +51,9 @@ function loadIframe() {
   contentFrame.style.display = "block";
   contentFrame.src = "https://sspv2play.neocities.org/home";
 
+  // Wait for iframe to fully load
   contentFrame.onload = () => {
+    // Only show admin panel button if the user is an admin
     if (currentUser.role === "admin") initAdminOverlay();
     initChat();
   };
@@ -61,7 +61,7 @@ function loadIframe() {
 
 /* ---------- ADMIN PANEL ---------- */
 function initAdminOverlay() {
-  if (document.getElementById("adminBtn")) return;
+  if (document.getElementById("adminBtn")) return; // avoid duplicate
 
   const btn = document.createElement("button");
   btn.id = "adminBtn";
@@ -75,7 +75,7 @@ function initAdminOverlay() {
   btn.style.background = "#8e44ad";
   btn.style.color = "#fff";
   btn.style.border = "1px solid #fff";
-  btn.style.borderRadius = "5px";
+  btn.style.borderRadius = "50%"; // square=height, width same as height
   btn.style.cursor = "pointer";
   btn.style.zIndex = "9999";
   document.body.appendChild(btn);
@@ -128,6 +128,7 @@ function initAdminOverlay() {
           });
           u.banned = !u.banned;
           banBtn.textContent = u.banned ? "Unban" : "Ban";
+          // Immediately log out if the banned user is online
           if (u.username === currentUser.username && u.banned) window.location.reload();
         };
         line.appendChild(banBtn);
@@ -143,7 +144,7 @@ function initAdminOverlay() {
   setInterval(() => { if (panel.style.display === "block") updatePanel(); }, 5000);
 }
 
-/* ---------- CHAT BOX ---------- */
+/* ---------- CHAT ---------- */
 function initChat() {
   if (document.getElementById("chatBox")) return;
 
