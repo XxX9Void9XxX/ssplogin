@@ -1,133 +1,168 @@
 import express from "express";
-import bcrypt from "bcrypt";
-import sqlite3 from "sqlite3";
-import path from "path";
-import { fileURLToPath } from "url";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+import session from "express-session";
+import cors from "cors";
 
 const app = express();
+
+app.use(cors());
 app.use(express.json());
-app.use(express.static(path.join(__dirname, "../public")));
 
-const db = new sqlite3.Database("./users.db");
+app.use(session({
+  secret: "ssp-secret",
+  resave: false,
+  saveUninitialized: false
+}));
 
-// Create users table
-db.run(`
-CREATE TABLE IF NOT EXISTS users (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  username TEXT UNIQUE,
-  email TEXT,
-  password TEXT,
-  role TEXT DEFAULT 'user',
-  banned INTEGER DEFAULT 0,
-  online INTEGER DEFAULT 0,
-  last_login TEXT
-)
-`);
+app.use(express.static("../public"));
 
-// In-memory chat messages
+let users = [
+  {
+    username: "a",
+    password: "a",
+    role: "admin",
+    banned: false,
+    lastLogin: null
+  }
+];
+
+let onlineUsers = [];
 let chatMessages = [];
 
-// -------------------- LOGIN --------------------
-app.post("/api/login", async (req, res) => {
+/* SIGNUP */
+app.post("/signup", (req, res) => {
+  const { username, password, email } = req.body;
+
+  if (!username || !password || !email)
+    return res.json({ success: false });
+
+  if (users.find(u => u.username === username))
+    return res.json({ success: false, message: "Username taken" });
+
+  const existingEmail = users.find(u => u.email === email);
+
+  if (existingEmail && email !== "brooksm@carbonschools.org")
+    return res.json({ success: false, message: "Email already used" });
+
+  users.push({
+    username,
+    password,
+    email,
+    role: "user",
+    banned: false,
+    lastLogin: null
+  });
+
+  res.json({ success: true });
+});
+
+/* LOGIN */
+app.post("/login", (req, res) => {
   const { username, password } = req.body;
 
-  // ---------- TEMPORARY ADMIN LOGIN ----------
-  if (username === "a" && password === "a") {
-    db.get("SELECT * FROM users WHERE username = 'Admin'", async (err, adminUser) => {
-      if (!adminUser) {
-        const hash = await bcrypt.hash("adminpassword", 10);
-        db.run(
-          "INSERT INTO users (username, email, password, role, banned, online) VALUES (?,?,?,?,?,?)",
-          ["Admin", "admin@domain.com", hash, "admin", 0, 1]
-        );
-      } else {
-        db.run("UPDATE users SET online=1 WHERE username='Admin'");
-      }
-    });
+  const user = users.find(u => u.username === username);
 
-    return res.json({
-      success: true,
-      username: "Admin",
-      role: "admin",
-      chatName: "Admin"
-    });
+  if (!user) return res.json({ success: false });
+
+  if (user.banned)
+    return res.json({ success: false, message: "Banned" });
+
+  if (user.password !== password)
+    return res.json({ success: false });
+
+  if (username === "a") {
+    user.role = "admin";
   }
 
-  // ---------- NORMAL LOGIN ----------
-  db.get("SELECT * FROM users WHERE username = ?", [username], async (err, user) => {
-    if (!user) return res.json({ success: false, message: "User not found" });
-    if (user.banned) return res.json({ success: false, message: "You are banned" });
+  user.lastLogin = new Date().toISOString();
 
-    const valid = await bcrypt.compare(password, user.password);
-    if (!valid) return res.json({ success: false, message: "Wrong password" });
+  req.session.user = {
+    username: user.username,
+    role: user.role
+  };
 
-    const chatName = user.role === "admin" ? "Admin" : user.username;
-    db.run("UPDATE users SET online=1, last_login=? WHERE username=?", [new Date().toISOString(), user.username]);
+  if (!onlineUsers.includes(user.username))
+    onlineUsers.push(user.username);
 
-    res.json({ success: true, username: user.username, role: user.role, chatName });
+  res.json({
+    success: true,
+    username: user.username,
+    role: user.role
   });
 });
 
-// -------------------- SIGNUP --------------------
-app.post("/api/signup", (req, res) => {
-  const { username, email, password } = req.body;
-  if (!username || !email || !password) return res.json({ success: false, message: "Missing fields" });
+/* LOGOUT */
+app.post("/logout", (req, res) => {
+  if (req.session.user) {
+    onlineUsers = onlineUsers.filter(
+      u => u !== req.session.user.username
+    );
+  }
 
-  db.get("SELECT COUNT(*) AS count FROM users WHERE email = ?", [email], (err, row) => {
-    if (row.count > 0 && email !== "brooksm@carbonschools.org") {
-      return res.json({ success: false, message: "Only one account per email allowed" });
-    }
-
-    bcrypt.hash(password, 10, (err, hash) => {
-      db.run(
-        "INSERT INTO users (username, email, password, role, banned, online) VALUES (?,?,?,?,?,?)",
-        [username, email, hash, "user", 0, 0],
-        function (err2) {
-          if (err2) return res.json({ success: false, message: "Username exists" });
-          res.json({ success: true, username, role: "user" });
-        }
-      );
-    });
+  req.session.destroy(() => {
+    res.json({ success: true });
   });
 });
 
-// -------------------- LOGOUT --------------------
-app.post("/api/logout", (req, res) => {
+/* USERS LIST */
+app.get("/users", (req, res) => {
+  if (!req.session.user || req.session.user.role !== "admin")
+    return res.json([]);
+
+  res.json({
+    users,
+    online: onlineUsers.length
+  });
+});
+
+/* BAN */
+app.post("/ban", (req, res) => {
+  if (!req.session.user || req.session.user.role !== "admin")
+    return res.json({ success: false });
+
   const { username } = req.body;
-  db.run("UPDATE users SET online=0 WHERE username=?", [username]);
+
+  if (username === "a")
+    return res.json({ success: false });
+
+  const user = users.find(u => u.username === username);
+  if (user) user.banned = true;
+
+  onlineUsers = onlineUsers.filter(u => u !== username);
+
   res.json({ success: true });
 });
 
-// -------------------- ADMIN --------------------
-app.get("/api/admin/users", (req, res) => {
-  db.all("SELECT id, username, role, banned, online, last_login FROM users", [], (err, rows) => {
-    res.json(rows);
-  });
-});
+/* UNBAN */
+app.post("/unban", (req, res) => {
+  if (!req.session.user || req.session.user.role !== "admin")
+    return res.json({ success: false });
 
-app.post("/api/admin/ban", (req, res) => {
-  const { userId, banned } = req.body;
-  db.run("UPDATE users SET banned=? WHERE id=?", [banned ? 1 : 0, userId]);
+  const { username } = req.body;
+
+  const user = users.find(u => u.username === username);
+  if (user) user.banned = false;
+
   res.json({ success: true });
 });
 
-// -------------------- CHAT --------------------
-app.post("/api/chat", (req, res) => {
-  const { chatName, message } = req.body;
-  if (!chatName || !message) return res.json({ success: false });
-  const msgText = `<${chatName}> ${message}`;
-  chatMessages.push(msgText);
-  if (chatMessages.length > 100) chatMessages.shift();
-  res.json({ success: true });
-});
-
-app.get("/api/chat", (req, res) => {
+/* CHAT */
+app.get("/chat", (req, res) => {
   res.json(chatMessages);
 });
 
-// -------------------- START SERVER --------------------
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log("SSP Auth running on port", PORT));
+app.post("/chat", (req, res) => {
+  if (!req.session.user) return res.json({ success: false });
+
+  chatMessages.push({
+    user: req.session.user.role === "admin"
+      ? "Admin"
+      : req.session.user.username,
+    message: req.body.message
+  });
+
+  res.json({ success: true });
+});
+
+app.listen(10000, () =>
+  console.log("SSP running on 10000")
+);
