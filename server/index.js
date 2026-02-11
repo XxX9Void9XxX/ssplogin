@@ -1,6 +1,9 @@
 import express from "express";
 import session from "express-session";
 import cors from "cors";
+import sqlite3 from "sqlite3";
+import { WebSocketServer } from "ws";
+import http from "http";
 import path from "path";
 import { fileURLToPath } from "url";
 
@@ -8,6 +11,8 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 const app = express();
+const server = http.createServer(app);
+const wss = new WebSocketServer({ server });
 
 app.use(cors());
 app.use(express.json());
@@ -15,139 +20,163 @@ app.use(express.json());
 app.use(session({
   secret: "ssp-secret",
   resave: false,
-  saveUninitialized: true,
-  cookie: { secure: false }
+  saveUninitialized: false
 }));
 
-// Serve public folder correctly
 app.use(express.static(path.join(__dirname, "../public")));
 
-// ====== MEMORY STORAGE ======
-let users = [
-  {
-    username: "a",
-    password: "a",
-    role: "admin",
-    banned: false,
-    lastLogin: null
-  }
-];
+const db = new sqlite3.Database("./users.db");
+
+db.serialize(() => {
+  db.run(`
+    CREATE TABLE IF NOT EXISTS users (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT UNIQUE,
+      password TEXT,
+      role TEXT DEFAULT 'user',
+      banned INTEGER DEFAULT 0,
+      lastLogin TEXT
+    )
+  `);
+
+  db.get("SELECT * FROM users WHERE username='a'", (err, row) => {
+    if (!row) {
+      db.run(
+        "INSERT INTO users (username,password,role) VALUES ('a','a','admin')"
+      );
+    }
+  });
+});
 
 let onlineUsers = new Set();
+let clients = new Map();
 
-// ====== SIGNUP ======
+// ===== SIGNUP =====
 app.post("/signup", (req, res) => {
   const { username, password, email } = req.body;
 
-  if (!username || !password || !email) {
-    return res.json({ success: false, message: "Missing fields" });
-  }
+  if (!username || !password || !email)
+    return res.json({ success: false });
 
-  if (users.find(u => u.username === username)) {
-    return res.json({ success: false, message: "Username exists" });
-  }
-
-  users.push({
-    username,
-    password,
-    role: "user",
-    banned: false,
-    lastLogin: null
-  });
-
-  res.json({ success: true });
+  db.run(
+    "INSERT INTO users (username,password) VALUES (?,?)",
+    [username, password],
+    err => {
+      if (err) return res.json({ success: false });
+      res.json({ success: true });
+    }
+  );
 });
 
-// ====== LOGIN ======
+// ===== LOGIN =====
 app.post("/login", (req, res) => {
   const { username, password } = req.body;
 
-  const user = users.find(u => u.username === username);
+  db.get(
+    "SELECT * FROM users WHERE username=?",
+    [username],
+    (err, user) => {
+      if (!user) return res.json({ success: false });
+      if (user.banned) return res.json({ success: false, banned: true });
+      if (user.password !== password)
+        return res.json({ success: false });
 
-  if (!user) {
-    return res.json({ success: false, message: "User not found" });
-  }
+      db.run(
+        "UPDATE users SET lastLogin=? WHERE username=?",
+        [new Date().toISOString(), username]
+      );
 
-  if (user.banned) {
-    return res.json({ success: false, message: "You are banned." });
-  }
+      onlineUsers.add(username);
 
-  if (user.password !== password) {
-    return res.json({ success: false, message: "Wrong password" });
-  }
-
-  // Force admin
-  if (user.username === "a") {
-    user.role = "admin";
-  }
-
-  user.lastLogin = new Date().toISOString();
-
-  req.session.user = null; // DO NOT REMEMBER LOGIN
-
-  onlineUsers.add(user.username);
-
-  res.json({
-    success: true,
-    username: user.username,
-    role: user.role
-  });
+      res.json({
+        success: true,
+        username,
+        role: user.role
+      });
+    }
+  );
 });
 
-// ====== LOGOUT ======
+// ===== LOGOUT =====
 app.post("/logout", (req, res) => {
-  if (req.session.user) {
-    onlineUsers.delete(req.session.user.username);
-  }
-
-  req.session.destroy(() => {
-    res.json({ success: true });
-  });
+  const { username } = req.body;
+  onlineUsers.delete(username);
+  res.json({ success: true });
 });
 
-// ====== GET USERS (ADMIN PANEL) ======
+// ===== USERS LIST =====
 app.get("/users", (req, res) => {
-  res.json({
-    users,
-    onlineCount: onlineUsers.size
+  db.all("SELECT username,role,banned,lastLogin FROM users", (err, rows) => {
+    res.json({
+      users: rows,
+      onlineCount: onlineUsers.size
+    });
   });
 });
 
-// ====== BAN USER ======
+// ===== BAN =====
 app.post("/ban", (req, res) => {
   const { username } = req.body;
+  if (username === "a") return res.json({ success: false });
 
-  if (username === "a") {
-    return res.json({ success: false });
-  }
+  db.run("UPDATE users SET banned=1 WHERE username=?", [username]);
+  onlineUsers.delete(username);
 
-  const user = users.find(u => u.username === username);
-  if (user) {
-    user.banned = true;
-    onlineUsers.delete(username);
+  if (clients.has(username)) {
+    clients.get(username).send(JSON.stringify({ type: "banned" }));
+    clients.get(username).close();
   }
 
   res.json({ success: true });
 });
 
-// ====== UNBAN USER ======
+// ===== UNBAN =====
 app.post("/unban", (req, res) => {
   const { username } = req.body;
-
-  const user = users.find(u => u.username === username);
-  if (user) {
-    user.banned = false;
-  }
-
+  db.run("UPDATE users SET banned=0 WHERE username=?", [username]);
   res.json({ success: true });
 });
 
-// ====== FALLBACK FOR RENDER ======
+// ===== CHAT =====
+wss.on("connection", ws => {
+  let currentUser = null;
+
+  ws.on("message", message => {
+    const data = JSON.parse(message);
+
+    if (data.type === "join") {
+      currentUser = data.username;
+      clients.set(currentUser, ws);
+      return;
+    }
+
+    if (data.type === "chat") {
+      const payload = {
+        type: "chat",
+        username: data.role === "admin" ? "Admin" : data.username,
+        message: data.message
+      };
+
+      wss.clients.forEach(client => {
+        if (client.readyState === 1)
+          client.send(JSON.stringify(payload));
+      });
+    }
+  });
+
+  ws.on("close", () => {
+    if (currentUser) {
+      onlineUsers.delete(currentUser);
+      clients.delete(currentUser);
+    }
+  });
+});
+
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "../public/index.html"));
 });
 
 const PORT = process.env.PORT || 10000;
-app.listen(PORT, () => {
-  console.log("SSP running on port", PORT);
-});
+server.listen(PORT, () =>
+  console.log("SSP FULL SYSTEM running on port", PORT)
+);
