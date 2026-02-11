@@ -5,18 +5,20 @@ const app = document.getElementById("app");
 const msg = document.getElementById("msg");
 const msg2 = document.getElementById("msg2");
 
+/* ---------- SWITCH PANELS ---------- */
 function showSignup(){ loginPanel.style.display="none"; signupPanel.style.display="block"; }
 function showLogin(){ signupPanel.style.display="none"; loginPanel.style.display="block"; }
 function enterApp(){ authBox.style.display="none"; app.style.display="block"; }
 
-/* ---------- CHECK SESSION ---------- */
+/* ---------- CURRENT USER & ONLINE STATUS ---------- */
 let currentUser={};
 async function checkSession(){
   const res = await fetch("/api/me");
   const data = await res.json();
   if(data.loggedIn){
     currentUser = data;
-    enterApp();
+    // **Do not auto-enter app** — login form stays visible
+    // just update online timestamp for admin
     if(currentUser.role==="admin") initAdminOverlay();
   }
 }
@@ -52,40 +54,49 @@ async function signup(){
 
 /* ---------- ADMIN PANEL ---------- */
 function initAdminOverlay(){
+  // Check if button already exists
+  if(document.getElementById("adminBtn")) return;
+
   const btn = document.createElement("button");
+  btn.id = "adminBtn";
   btn.textContent = "A";
-  btn.style.position="fixed";
-  btn.style.bottom="5px";
-  btn.style.left="5px";
-  btn.style.zIndex="9999";
-  btn.style.padding="4px 6px";
-  btn.style.background="#8e44ad";
-  btn.style.color="#fff";
-  btn.style.borderRadius="3px";
-  btn.style.cursor="pointer";
+  btn.style.position = "fixed";
+  btn.style.bottom = "5px";
+  btn.style.left = "5px";
+  btn.style.zIndex = "9999";
+  btn.style.padding = "2px 4px";       // tiny padding
+  btn.style.fontSize = "10px";          // small font
+  btn.style.background = "#8e44ad";
+  btn.style.color = "#fff";
+  btn.style.border = "1px solid #fff";
+  btn.style.borderRadius = "3px";
+  btn.style.cursor = "pointer";
+  btn.style.boxShadow = "none";         // remove any shadows
   btn.title = "Admin Panel";
   document.body.appendChild(btn);
 
   const panel = document.createElement("div");
-  panel.style.position="fixed";
-  panel.style.bottom="35px";
-  panel.style.left="5px";
-  panel.style.width="320px";
-  panel.style.maxHeight="400px";
-  panel.style.background="rgba(0,0,0,0.95)";
-  panel.style.color="#fff";
-  panel.style.overflowY="auto";
-  panel.style.padding="10px";
-  panel.style.border="2px solid #9b59b6";
-  panel.style.borderRadius="10px";
-  panel.style.display="none";
-  panel.style.zIndex="9999";
+  panel.id = "adminPanel";
+  panel.style.position = "fixed";
+  panel.style.bottom = "25px";
+  panel.style.left = "5px";
+  panel.style.width = "320px";
+  panel.style.maxHeight = "400px";
+  panel.style.background = "rgba(0,0,0,0.95)";
+  panel.style.color = "#fff";
+  panel.style.overflowY = "auto";
+  panel.style.padding = "10px";
+  panel.style.border = "2px solid #9b59b6";
+  panel.style.borderRadius = "10px";
+  panel.style.display = "none";
+  panel.style.zIndex = "9999";
   document.body.appendChild(panel);
 
   async function updatePanel(){
     const res = await fetch("/api/admin/users");
     const users = await res.json();
     panel.innerHTML = "<h3>Users</h3>";
+
     const onlineCount = users.filter(u=>u.online).length;
     const countDiv = document.createElement("div");
     countDiv.textContent = `Currently online: ${onlineCount}`;
@@ -124,6 +135,5 @@ function initAdminOverlay(){
     if(panel.style.display==="block") updatePanel();
   };
 
-  // auto-refresh every 5s if panel open
-  setInterval(()=>{ if(panel.style.display==="block") updatePanel(); }, 5000);
+  setInterval(()=>{ if(panel.style.display==="block") updatePanel(); },5000);
 }
