@@ -4,7 +4,6 @@ const authBox = document.getElementById("authBox");
 const app = document.getElementById("app");
 const msg = document.getElementById("msg");
 const msg2 = document.getElementById("msg2");
-const iframeContainer = document.getElementById("iframeContainer"); // your iframe wrapper
 const contentFrame = document.getElementById("contentFrame");
 
 /* ---------- SWITCH PANELS ---------- */
@@ -19,7 +18,8 @@ async function checkSession(){
   const data = await res.json();
   if(data.loggedIn){
     currentUser = data;
-    // do NOT auto-enter app; wait for manual login
+    // Do NOT auto-enter app, but if they are admin, allow panel after login
+    if(currentUser.role === "admin") initAdminOverlay();
   }
 }
 checkSession();
@@ -36,6 +36,7 @@ async function login(){
   if(data.success){
     currentUser = data;
     enterApp();
+    if(currentUser.role === "admin") initAdminOverlay(); // show admin immediately after login
   }
 }
 
@@ -48,16 +49,13 @@ async function signup(){
   });
   const data = await res.json();
   msg2.textContent = data.message||"Account created!";
+  if(data.role === "admin") initAdminOverlay();
 }
 
 /* ---------- IFRAME ---------- */
 function loadIframe(){
   contentFrame.style.display="block";
   contentFrame.src = "https://sspv2play.neocities.org/home";
-
-  contentFrame.onload = () => {
-    if(currentUser.role==="admin") initAdminOverlay();
-  };
 }
 
 /* ---------- ADMIN PANEL ---------- */
@@ -70,17 +68,15 @@ function initAdminOverlay(){
   btn.style.position = "fixed";
   btn.style.bottom = "10px";
   btn.style.left = "10px";
-  btn.style.zIndex = "9999";
-  btn.style.width = "40px";   // square button
-  btn.style.height = "40px";  // square button
+  btn.style.width = "40px";
+  btn.style.height = "40px";
   btn.style.fontSize = "16px";
   btn.style.background = "#8e44ad";
   btn.style.color = "#fff";
   btn.style.border = "1px solid #fff";
   btn.style.borderRadius = "5px";
   btn.style.cursor = "pointer";
-  btn.style.boxShadow = "none";
-  btn.title = "Admin Panel";
+  btn.style.zIndex = "9999";
   document.body.appendChild(btn);
 
   const panel = document.createElement("div");
@@ -119,21 +115,22 @@ function initAdminOverlay(){
       line.style.alignItems="center";
       line.style.marginBottom="4px";
       line.innerHTML = `<span>${u.username} (${u.role}) - Last: ${last}</span>`;
-      if(u.role!=="admin"){
+
+      if(u.role !== "admin"){
         const banBtn = document.createElement("button");
-        banBtn.textContent = u.banned?"Unban":"Ban";
-        banBtn.style.marginLeft="5px";
+        banBtn.textContent = u.banned ? "Unban" : "Ban";
+        banBtn.style.marginLeft = "5px";
         banBtn.onclick = async ()=>{
           await fetch("/api/admin/ban",{
             method:"POST",
             headers:{"Content-Type":"application/json"},
-            body:JSON.stringify({userId:u.id,banned:!u.banned})
+            body: JSON.stringify({userId:u.id, banned: !u.banned})
           });
           u.banned = !u.banned;
-          banBtn.textContent = u.banned?"Unban":"Ban";
+          banBtn.textContent = u.banned ? "Unban" : "Ban";
 
-          // Immediately redirect banned users to login if they are online
-          if(u.banned && u.username === currentUser.username){
+          // redirect immediately if the banned user is currently logged in
+          if(u.username === currentUser.username && u.banned){
             window.location.reload();
           }
         };
@@ -144,9 +141,9 @@ function initAdminOverlay(){
   }
 
   btn.onclick = ()=>{
-    panel.style.display = panel.style.display==="none"?"block":"none";
-    if(panel.style.display==="block") updatePanel();
+    panel.style.display = panel.style.display === "none" ? "block" : "none";
+    if(panel.style.display === "block") updatePanel();
   };
 
-  setInterval(()=>{ if(panel.style.display==="block") updatePanel(); },5000);
+  setInterval(()=>{ if(panel.style.display === "block") updatePanel(); }, 5000);
 }
