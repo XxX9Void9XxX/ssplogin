@@ -11,15 +11,14 @@ function showSignup(){ loginPanel.style.display="none"; signupPanel.style.displa
 function showLogin(){ signupPanel.style.display="none"; loginPanel.style.display="block"; }
 function enterApp(){ authBox.style.display="none"; app.style.display="block"; loadIframe(); }
 
-/* ---------- CURRENT USER & ONLINE STATUS ---------- */
+/* ---------- CURRENT USER ---------- */
 let currentUser={};
 async function checkSession(){
   const res = await fetch("/api/me");
   const data = await res.json();
   if(data.loggedIn){
     currentUser = data;
-    // Do NOT auto-enter app, but if they are admin, allow panel after login
-    if(currentUser.role === "admin") initAdminOverlay();
+    if(currentUser.role === "admin") initAdminOverlay(); // allow admin panel after login
   }
 }
 checkSession();
@@ -36,7 +35,7 @@ async function login(){
   if(data.success){
     currentUser = data;
     enterApp();
-    if(currentUser.role === "admin") initAdminOverlay(); // show admin immediately after login
+    if(currentUser.role === "admin") initAdminOverlay();
   }
 }
 
@@ -54,7 +53,6 @@ async function signup(){
 
 /* ---------- IFRAME ---------- */
 function loadIframe(){
-  contentFrame.style.display="block";
   contentFrame.src = "https://sspv2play.neocities.org/home";
 }
 
@@ -62,6 +60,7 @@ function loadIframe(){
 function initAdminOverlay(){
   if(document.getElementById("adminBtn")) return;
 
+  // Square admin button
   const btn = document.createElement("button");
   btn.id = "adminBtn";
   btn.textContent = "A";
@@ -100,7 +99,6 @@ function initAdminOverlay(){
     const res = await fetch("/api/admin/users");
     const users = await res.json();
     panel.innerHTML = "<h3>Users</h3>";
-
     const onlineCount = users.filter(u=>u.online).length;
     const countDiv = document.createElement("div");
     countDiv.textContent = `Currently online: ${onlineCount}`;
@@ -129,7 +127,7 @@ function initAdminOverlay(){
           u.banned = !u.banned;
           banBtn.textContent = u.banned ? "Unban" : "Ban";
 
-          // redirect immediately if the banned user is currently logged in
+          // redirect immediately if current user banned
           if(u.username === currentUser.username && u.banned){
             window.location.reload();
           }
