@@ -1,57 +1,183 @@
 <!DOCTYPE html>
-<html lang="en">
+<html>
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>SSP Login</title>
-  <link rel="icon" href="SSP.png" type="image/x-icon">
-  <style>
-    * { box-sizing: border-box; margin:0; padding:0; font-family: Arial, sans-serif; }
-    body { background: black; color: white; text-align: center; height: 100vh; overflow: hidden; }
+<meta charset="UTF-8">
+<title>SSP Login</title>
+<style>
+body { margin:0; font-family:Arial; background:#111; color:white; }
+#auth { text-align:center; margin-top:100px; }
+input { margin:5px; padding:5px; }
+button { padding:5px 10px; }
 
-    /* Login/Signup container */
-    #authBox { position: absolute; top:50%; left:50%; transform: translate(-50%, -50%); width: 300px; }
+#app { display:none; height:100vh; }
 
-    input { width: 100%; padding: 8px; margin: 6px 0; border-radius: 5px; border: 1px solid #fff; background: #222; color: #fff; }
-    button { padding: 8px 12px; margin-top: 8px; cursor: pointer; background:#8e44ad; border:none; color:#fff; border-radius:5px; }
-    .link { color: #9b59b6; cursor:pointer; display:block; margin-top:5px; text-decoration: underline; }
+iframe {
+  width:100%;
+  height:100%;
+  border:none;
+}
 
-    #app { display:none; width: 100%; height: 100%; }
-    #contentFrame { width:100%; height:100%; border:none; display:block; }
+#adminBtn {
+  position:fixed;
+  bottom:10px;
+  left:10px;
+  width:40px;
+  height:40px;
+  border-radius:50%;
+  background:red;
+  color:white;
+  border:none;
+  display:none;
+}
 
-    #msg, #msg2 { color: #ff8080; font-size: 0.9rem; margin-top: 4px; min-height: 18px; }
-  </style>
+#adminPanel {
+  position:fixed;
+  bottom:60px;
+  left:10px;
+  background:#222;
+  padding:10px;
+  display:none;
+  max-height:300px;
+  overflow:auto;
+}
+
+#chat {
+  position:fixed;
+  bottom:0;
+  right:0;
+  width:300px;
+  background:#222;
+}
+
+#chatMessages {
+  height:150px;
+  overflow:auto;
+}
+
+</style>
 </head>
 <body>
 
-  <div id="authBox">
-    <!-- Login Panel -->
-    <div id="loginPanel">
-      <h2>Login</h2>
-      <input id="loginUser" placeholder="Username">
-      <input id="loginPass" type="password" placeholder="Password">
-      <button onclick="login()">Login</button>
-      <div id="msg"></div>
-      <span class="link" onclick="showSignup()">Sign Up</span>
-    </div>
+<div id="auth">
+  <h2>Login</h2>
+  <input id="username" placeholder="Username"><br>
+  <input id="password" type="password" placeholder="Password"><br>
+  <input id="email" placeholder="Email (signup only)"><br>
+  <button onclick="login()">Login</button>
+  <button onclick="signup()">Sign Up</button>
+</div>
 
-    <!-- Signup Panel -->
-    <div id="signupPanel" style="display:none;">
-      <h2>Sign Up</h2>
-      <input id="suUser" placeholder="Username">
-      <input id="suEmail" placeholder="Email">
-      <input id="suPass" type="password" placeholder="Password">
-      <button onclick="signup()">Sign Up</button>
-      <div id="msg2"></div>
-      <span class="link" onclick="showLogin()">Back to Login</span>
-    </div>
+<div id="app">
+  <iframe src="https://sspv2play.neocities.org/home"></iframe>
+  <button id="adminBtn" onclick="toggleAdmin()">A</button>
+  <div id="adminPanel"></div>
+
+  <div id="chat">
+    <div id="chatMessages"></div>
+    <input id="chatInput" placeholder="Message">
+    <button onclick="sendChat()">Send</button>
   </div>
+</div>
 
-  <!-- App (iframe) -->
-  <div id="app">
-    <iframe id="contentFrame"></iframe>
-  </div>
+<script>
 
-  <script src="auth.js"></script>
+let currentUser = null;
+
+function login(){
+  fetch("/login",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({
+      username:username.value,
+      password:password.value
+    })
+  }).then(r=>r.json()).then(data=>{
+    if(data.success){
+      currentUser=data;
+      auth.style.display="none";
+      app.style.display="block";
+
+      if(data.role==="admin"){
+        adminBtn.style.display="block";
+        loadUsers();
+      }
+    }
+  });
+}
+
+function signup(){
+  fetch("/signup",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({
+      username:username.value,
+      password:password.value,
+      email:email.value
+    })
+  }).then(r=>r.json()).then(data=>{
+    alert(data.success?"Account created":"Error");
+  });
+}
+
+function toggleAdmin(){
+  adminPanel.style.display=
+    adminPanel.style.display==="block"?"none":"block";
+}
+
+function loadUsers(){
+  fetch("/users").then(r=>r.json()).then(data=>{
+    if(!data.users) return;
+
+    adminPanel.innerHTML=
+      "Users<br>Online: "+data.online+"<br><br>";
+
+    data.users.forEach(u=>{
+      const div=document.createElement("div");
+      div.innerHTML=
+        u.username+" ("+u.role+") - Last: "+
+        (u.lastLogin?new Date(u.lastLogin).toLocaleString():"Never");
+
+      if(u.username!==currentUser.username){
+        const btn=document.createElement("button");
+        btn.innerText=u.banned?"Unban":"Ban";
+        btn.onclick=()=>{
+          fetch("/"+(u.banned?"unban":"ban"),{
+            method:"POST",
+            headers:{"Content-Type":"application/json"},
+            body:JSON.stringify({username:u.username})
+          }).then(()=>loadUsers());
+        };
+        div.appendChild(btn);
+      }
+
+      adminPanel.appendChild(div);
+    });
+  });
+}
+
+function sendChat(){
+  fetch("/chat",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({message:chatInput.value})
+  }).then(()=>{
+    chatInput.value="";
+    loadChat();
+  });
+}
+
+function loadChat(){
+  fetch("/chat").then(r=>r.json()).then(data=>{
+    chatMessages.innerHTML="";
+    data.forEach(m=>{
+      chatMessages.innerHTML+=
+        "&lt;"+m.user+"&gt; "+m.message+"<br>";
+    });
+  });
+}
+
+setInterval(loadChat,2000);
+
+</script>
 </body>
 </html>
