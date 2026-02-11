@@ -6,22 +6,12 @@ const msg = document.getElementById("msg");
 const msg2 = document.getElementById("msg2");
 const contentFrame = document.getElementById("contentFrame");
 
+let currentUser = {};
+
 /* ---------- SWITCH PANELS ---------- */
 function showSignup(){ loginPanel.style.display="none"; signupPanel.style.display="block"; }
 function showLogin(){ signupPanel.style.display="none"; loginPanel.style.display="block"; }
 function enterApp(){ authBox.style.display="none"; app.style.display="block"; loadIframe(); }
-
-/* ---------- CURRENT USER ---------- */
-let currentUser = {};
-async function checkSession(){
-  const res = await fetch("/api/me");
-  const data = await res.json();
-  if(data.loggedIn){
-    currentUser = data;
-    // Do NOT auto-enter app
-  }
-}
-checkSession();
 
 /* ---------- LOGIN ---------- */
 async function login(){
@@ -31,7 +21,7 @@ async function login(){
     body: JSON.stringify({username:loginUser.value,password:loginPass.value})
   });
   const data = await res.json();
-  msg.textContent = data.message || "";
+  msg.textContent = data.message||"";
   if(data.success){
     currentUser = data;
     enterApp();
@@ -46,7 +36,7 @@ async function signup(){
     body: JSON.stringify({username:suUser.value,email:suEmail.value,password:suPass.value})
   });
   const data = await res.json();
-  msg2.textContent = data.message || "Account created!";
+  msg2.textContent = data.message||"";
 }
 
 /* ---------- IFRAME ---------- */
@@ -54,11 +44,9 @@ function loadIframe(){
   contentFrame.style.display="block";
   contentFrame.src = "https://sspv2play.neocities.org/home";
 
-  contentFrame.onload = () => {
-    // Only show admin panel after iframe loads if user is admin
-    if(currentUser.role === "admin") {
-      initAdminOverlay();
-    }
+  contentFrame.onload = ()=>{
+    if(currentUser.role==="admin") initAdminOverlay();
+    initChat();
   };
 }
 
@@ -103,11 +91,11 @@ function initAdminOverlay(){
   async function updatePanel(){
     const res = await fetch("/api/admin/users");
     const users = await res.json();
-    panel.innerHTML = "<h3>Users</h3>";
+    panel.innerHTML="<h3>Users</h3>";
     const onlineCount = users.filter(u=>u.online).length;
     const countDiv = document.createElement("div");
-    countDiv.textContent = `Currently online: ${onlineCount}`;
-    countDiv.style.marginBottom = "6px";
+    countDiv.textContent=`Currently online: ${onlineCount}`;
+    countDiv.style.marginBottom="6px";
     panel.appendChild(countDiv);
 
     users.forEach(u=>{
@@ -119,23 +107,15 @@ function initAdminOverlay(){
       line.style.marginBottom="4px";
       line.innerHTML = `<span>${u.username} (${u.role}) - Last: ${last}</span>`;
 
-      if(u.role !== "admin"){
-        const banBtn = document.createElement("button");
-        banBtn.textContent = u.banned ? "Unban" : "Ban";
-        banBtn.style.marginLeft = "5px";
-        banBtn.onclick = async ()=>{
-          await fetch("/api/admin/ban",{
-            method:"POST",
-            headers:{"Content-Type":"application/json"},
-            body: JSON.stringify({userId:u.id, banned: !u.banned})
-          });
-          u.banned = !u.banned;
-          banBtn.textContent = u.banned ? "Unban" : "Ban";
-
-          // Immediately redirect if the current user is banned
-          if(u.username === currentUser.username && u.banned){
-            window.location.reload();
-          }
+      if(u.role!=="admin"){
+        const banBtn=document.createElement("button");
+        banBtn.textContent=u.banned?"Unban":"Ban";
+        banBtn.style.marginLeft="5px";
+        banBtn.onclick=async ()=>{
+          await fetch("/api/admin/ban",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({userId:u.id,banned:!u.banned})});
+          u.banned=!u.banned;
+          banBtn.textContent=u.banned?"Unban":"Ban";
+          if(u.username===currentUser.username && u.banned) window.location.reload();
         };
         line.appendChild(banBtn);
       }
@@ -143,10 +123,81 @@ function initAdminOverlay(){
     });
   }
 
-  btn.onclick = ()=>{
-    panel.style.display = panel.style.display === "none" ? "block" : "none";
-    if(panel.style.display === "block") updatePanel();
+  btn.onclick=()=>{ panel.style.display=panel.style.display==="none"?"block":"none"; if(panel.style.display==="block") updatePanel(); }
+  setInterval(()=>{ if(panel.style.display==="block") updatePanel(); },5000);
+}
+
+/* ---------- CHAT BOX ---------- */
+function initChat(){
+  if(document.getElementById("chatBox")) return;
+
+  const chatBox = document.createElement("div");
+  chatBox.id="chatBox";
+  chatBox.style.position="fixed";
+  chatBox.style.bottom="10px";
+  chatBox.style.right="10px";
+  chatBox.style.width="250px";
+  chatBox.style.height="300px";
+  chatBox.style.background="rgba(0,0,0,0.9)";
+  chatBox.style.color="#fff";
+  chatBox.style.border="2px solid #9b59b6";
+  chatBox.style.borderRadius="10px";
+  chatBox.style.display="flex";
+  chatBox.style.flexDirection="column";
+  chatBox.style.zIndex="9999";
+  document.body.appendChild(chatBox);
+
+  const messagesDiv=document.createElement("div");
+  messagesDiv.style.flex="1";
+  messagesDiv.style.overflowY="auto";
+  messagesDiv.style.padding="5px";
+  chatBox.appendChild(messagesDiv);
+
+  const inputDiv=document.createElement("div");
+  inputDiv.style.display="flex";
+  inputDiv.style.marginTop="5px";
+  chatBox.appendChild(inputDiv);
+
+  const input=document.createElement("input");
+  input.type="text";
+  input.placeholder="Type a message...";
+  input.style.flex="1";
+  input.style.padding="5px";
+  input.style.borderRadius="5px";
+  input.style.border="1px solid #fff";
+  input.style.background="#222";
+  input.style.color="#fff";
+  inputDiv.appendChild(input);
+
+  const sendBtn=document.createElement("button");
+  sendBtn.textContent="Send";
+  sendBtn.style.marginLeft="5px";
+  sendBtn.style.borderRadius="5px";
+  sendBtn.style.border="none";
+  sendBtn.style.background="#8e44ad";
+  sendBtn.style.color="#fff";
+  sendBtn.style.cursor="pointer";
+  inputDiv.appendChild(sendBtn);
+
+  function fetchMessages(){
+    fetch("/api/chat")
+      .then(res=>res.json())
+      .then(data=>{
+        messagesDiv.innerHTML="";
+        data.forEach(m=>{ const p=document.createElement("div"); p.textContent=m; messagesDiv.appendChild(p); });
+        messagesDiv.scrollTop=messagesDiv.scrollHeight;
+      });
+  }
+
+  sendBtn.onclick = () => {
+    if(input.value.trim()!==""){
+      fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:currentUser.username,message:input.value})})
+      .then(()=>fetchMessages());
+      input.value="";
+    }
   };
 
-  setInterval(()=>{ if(panel.style.display==="block") updatePanel(); }, 5000);
+  input.addEventListener("keypress", e => { if(e.key==="Enter") sendBtn.click(); });
+
+  setInterval(fetchMessages,2000);
 }
