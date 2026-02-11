@@ -201,3 +201,4 @@ function initChat(){
 
   setInterval(fetchMessages,2000);
 }
+
