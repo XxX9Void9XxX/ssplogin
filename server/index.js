@@ -1,6 +1,11 @@
 import express from "express";
 import session from "express-session";
 import cors from "cors";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 
@@ -10,11 +15,14 @@ app.use(express.json());
 app.use(session({
   secret: "ssp-secret",
   resave: false,
-  saveUninitialized: false
+  saveUninitialized: true,
+  cookie: { secure: false }
 }));
 
-app.use(express.static("../public"));
+// Serve public folder correctly
+app.use(express.static(path.join(__dirname, "../public")));
 
+// ====== MEMORY STORAGE ======
 let users = [
   {
     username: "a",
@@ -25,28 +33,23 @@ let users = [
   }
 ];
 
-let onlineUsers = [];
-let chatMessages = [];
+let onlineUsers = new Set();
 
-/* SIGNUP */
+// ====== SIGNUP ======
 app.post("/signup", (req, res) => {
   const { username, password, email } = req.body;
 
-  if (!username || !password || !email)
-    return res.json({ success: false });
+  if (!username || !password || !email) {
+    return res.json({ success: false, message: "Missing fields" });
+  }
 
-  if (users.find(u => u.username === username))
-    return res.json({ success: false, message: "Username taken" });
-
-  const existingEmail = users.find(u => u.email === email);
-
-  if (existingEmail && email !== "brooksm@carbonschools.org")
-    return res.json({ success: false, message: "Email already used" });
+  if (users.find(u => u.username === username)) {
+    return res.json({ success: false, message: "Username exists" });
+  }
 
   users.push({
     username,
     password,
-    email,
     role: "user",
     banned: false,
     lastLogin: null
@@ -55,33 +58,34 @@ app.post("/signup", (req, res) => {
   res.json({ success: true });
 });
 
-/* LOGIN */
+// ====== LOGIN ======
 app.post("/login", (req, res) => {
   const { username, password } = req.body;
 
   const user = users.find(u => u.username === username);
 
-  if (!user) return res.json({ success: false });
+  if (!user) {
+    return res.json({ success: false, message: "User not found" });
+  }
 
-  if (user.banned)
-    return res.json({ success: false, message: "Banned" });
+  if (user.banned) {
+    return res.json({ success: false, message: "You are banned." });
+  }
 
-  if (user.password !== password)
-    return res.json({ success: false });
+  if (user.password !== password) {
+    return res.json({ success: false, message: "Wrong password" });
+  }
 
-  if (username === "a") {
+  // Force admin
+  if (user.username === "a") {
     user.role = "admin";
   }
 
   user.lastLogin = new Date().toISOString();
 
-  req.session.user = {
-    username: user.username,
-    role: user.role
-  };
+  req.session.user = null; // DO NOT REMEMBER LOGIN
 
-  if (!onlineUsers.includes(user.username))
-    onlineUsers.push(user.username);
+  onlineUsers.add(user.username);
 
   res.json({
     success: true,
@@ -90,12 +94,10 @@ app.post("/login", (req, res) => {
   });
 });
 
-/* LOGOUT */
+// ====== LOGOUT ======
 app.post("/logout", (req, res) => {
   if (req.session.user) {
-    onlineUsers = onlineUsers.filter(
-      u => u !== req.session.user.username
-    );
+    onlineUsers.delete(req.session.user.username);
   }
 
   req.session.destroy(() => {
@@ -103,67 +105,49 @@ app.post("/logout", (req, res) => {
   });
 });
 
-/* USERS LIST */
+// ====== GET USERS (ADMIN PANEL) ======
 app.get("/users", (req, res) => {
-  if (!req.session.user || req.session.user.role !== "admin")
-    return res.json([]);
-
   res.json({
     users,
-    online: onlineUsers.length
+    onlineCount: onlineUsers.size
   });
 });
 
-/* BAN */
+// ====== BAN USER ======
 app.post("/ban", (req, res) => {
-  if (!req.session.user || req.session.user.role !== "admin")
-    return res.json({ success: false });
-
   const { username } = req.body;
 
-  if (username === "a")
+  if (username === "a") {
     return res.json({ success: false });
+  }
 
   const user = users.find(u => u.username === username);
-  if (user) user.banned = true;
-
-  onlineUsers = onlineUsers.filter(u => u !== username);
+  if (user) {
+    user.banned = true;
+    onlineUsers.delete(username);
+  }
 
   res.json({ success: true });
 });
 
-/* UNBAN */
+// ====== UNBAN USER ======
 app.post("/unban", (req, res) => {
-  if (!req.session.user || req.session.user.role !== "admin")
-    return res.json({ success: false });
-
   const { username } = req.body;
 
   const user = users.find(u => u.username === username);
-  if (user) user.banned = false;
+  if (user) {
+    user.banned = false;
+  }
 
   res.json({ success: true });
 });
 
-/* CHAT */
-app.get("/chat", (req, res) => {
-  res.json(chatMessages);
+// ====== FALLBACK FOR RENDER ======
+app.get("*", (req, res) => {
+  res.sendFile(path.join(__dirname, "../public/index.html"));
 });
 
-app.post("/chat", (req, res) => {
-  if (!req.session.user) return res.json({ success: false });
-
-  chatMessages.push({
-    user: req.session.user.role === "admin"
-      ? "Admin"
-      : req.session.user.username,
-    message: req.body.message
-  });
-
-  res.json({ success: true });
+const PORT = process.env.PORT || 10000;
+app.listen(PORT, () => {
+  console.log("SSP running on port", PORT);
 });
-
-app.listen(10000, () =>
-  console.log("SSP running on 10000")
-);
-
