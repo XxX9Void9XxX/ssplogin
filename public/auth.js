@@ -10,7 +10,7 @@ function showLogin(){ signupPanel.style.display="none"; loginPanel.style.display
 function enterApp(){ authBox.style.display="none"; app.style.display="block"; }
 
 /* ---------- CHECK SESSION ---------- */
-let currentUser = {};
+let currentUser={};
 async function checkSession(){
   const res = await fetch("/api/me");
   const data = await res.json();
@@ -53,24 +53,24 @@ async function signup(){
 /* ---------- ADMIN OVERLAY ---------- */
 function initAdminOverlay(){
   const btn = document.createElement("button");
-  btn.textContent = "Admin Panel";
+  btn.textContent = "Admin";
   btn.style.position="fixed";
-  btn.style.top="10px";
-  btn.style.right="10px";
+  btn.style.bottom="10px";
+  btn.style.left="10px";
   btn.style.zIndex="9999";
-  btn.style.padding="8px";
+  btn.style.padding="6px 10px";
   btn.style.background="#8e44ad";
   btn.style.color="#fff";
-  btn.style.borderRadius="6px";
+  btn.style.borderRadius="4px";
   btn.style.cursor="pointer";
   document.body.appendChild(btn);
 
   const panel = document.createElement("div");
   panel.style.position="fixed";
-  panel.style.top="50px";
-  panel.style.right="10px";
-  panel.style.width="300px";
-  panel.style.maxHeight="500px";
+  panel.style.bottom="50px";
+  panel.style.left="10px";
+  panel.style.width="320px";
+  panel.style.maxHeight="400px";
   panel.style.background="rgba(0,0,0,0.95)";
   panel.style.color="#fff";
   panel.style.overflowY="auto";
@@ -92,8 +92,9 @@ function initAdminOverlay(){
         const line = document.createElement("div");
         line.style.display="flex";
         line.style.justifyContent="space-between";
+        line.style.alignItems="center";
         line.style.marginBottom="4px";
-        line.innerHTML = `<span>${u.username} (${u.role})</span> <span>Last: ${last}</span>`;
+        line.innerHTML = `<span>${u.username} (${u.role}) - Last: ${last}</span>`;
         if(u.role!=="admin"){
           const banBtn = document.createElement("button");
           banBtn.textContent = u.banned?"Unban":"Ban";
@@ -104,8 +105,8 @@ function initAdminOverlay(){
               headers:{"Content-Type":"application/json"},
               body:JSON.stringify({userId:u.id,banned:!u.banned})
             });
-            banBtn.textContent = u.banned?"Ban":"Unban";
             u.banned = !u.banned;
+            banBtn.textContent = u.banned?"Unban":"Ban";
           };
           line.appendChild(banBtn);
         }
