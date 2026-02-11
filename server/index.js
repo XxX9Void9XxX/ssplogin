@@ -12,22 +12,22 @@ const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, "../public")));
 
+/* ---------- SESSIONS (non-persistent) ---------- */
 app.use(session({
   secret: 'SUPER_SECRET_KEY_CHANGE_THIS',
   resave: false,
   saveUninitialized: false,
-  cookie: { maxAge: 1000 * 60 * 60 * 24 * 30 } // 30 days
+  cookie: { maxAge: null } // expires on browser close
 }));
 
 /* ---------- DATABASE ---------- */
 const dbPath = path.join(__dirname, "users.db");
-const db = new sqlite3.Database(dbPath, (err) => {
-  if (err) {
-    console.error("Error opening database:", err.message);
-    process.exit(1);
-  } else console.log("Database opened at", dbPath);
+const db = new sqlite3.Database(dbPath, err => {
+  if (err) return console.error("DB open error:", err.message);
+  console.log("Database ready at", dbPath);
 });
 
+/* ---------- CREATE TABLE ---------- */
 db.serialize(() => {
   db.run(`
     CREATE TABLE IF NOT EXISTS users (
@@ -39,12 +39,7 @@ db.serialize(() => {
       banned INTEGER DEFAULT 0,
       last_login INTEGER
     )
-  `, (err) => {
-    if (err) {
-      console.error("Table creation failed:", err.message);
-      process.exit(1);
-    } else console.log("Table 'users' ready.");
-  });
+  `, err => { if(err) console.error(err.message); });
 });
 
 /* ---------- SIGNUP ---------- */
@@ -54,18 +49,12 @@ app.post("/api/signup", async (req, res) => {
 
   const hash = await bcrypt.hash(password, 10);
 
-  // If user signs up as admin with special secret password
   let role = "user";
   if (username === "sspadminerror" && password === "<script.add.user>") role = "admin";
 
-  db.run(
-    "INSERT INTO users (username, email, password, role) VALUES (?,?,?,?)",
-    [username, email, hash, role],
-    (err) => {
-      if (err) return res.json({ success: false, message: "Username exists" });
-      res.json({ success: true, role });
-    }
-  );
+  db.run("INSERT INTO users (username,email,password,role) VALUES (?,?,?,?)",
+    [username,email,hash,role],
+    err => { if(err) return res.json({success:false,message:"Username exists"}); res.json({success:true, role}); });
 });
 
 /* ---------- LOGIN ---------- */
@@ -81,45 +70,41 @@ app.post("/api/login", (req, res) => {
 
     req.session.userId = user.id;
     req.session.role = user.role;
-
     db.run("UPDATE users SET last_login = ? WHERE id = ?", [Date.now(), user.id]);
     res.json({ success: true, username: user.username, role: user.role });
   });
 });
 
 /* ---------- CURRENT USER ---------- */
-app.get("/api/me", (req, res) => {
-  if (!req.session.userId) return res.json({ loggedIn: false });
-
-  db.get("SELECT username, role FROM users WHERE id = ?", [req.session.userId], (err, user) => {
-    if (!user) return res.json({ loggedIn: false });
-    res.json({ loggedIn: true, username: user.username, role: user.role });
+app.get("/api/me", (req,res) => {
+  if(!req.session.userId) return res.json({ loggedIn:false });
+  db.get("SELECT username, role FROM users WHERE id=?", [req.session.userId], (err,user)=>{
+    if(!user) return res.json({ loggedIn:false });
+    res.json({ loggedIn:true, username:user.username, role:user.role });
   });
 });
 
 /* ---------- LOGOUT ---------- */
-app.post("/api/logout", (req, res) => {
+app.post("/api/logout",(req,res)=>{
   req.session.destroy();
-  res.json({ success: true });
+  res.json({success:true});
 });
 
-/* ---------- ADMIN: LIST USERS ---------- */
-app.get("/api/admin/users", (req, res) => {
-  if (!req.session.role || req.session.role !== 'admin') return res.sendStatus(403);
-
-  db.all("SELECT id, username, role, banned, last_login FROM users", [], (err, rows) => {
+/* ---------- ADMIN USERS ---------- */
+app.get("/api/admin/users", (req,res)=>{
+  if(!req.session.role||req.session.role!=="admin") return res.sendStatus(403);
+  db.all("SELECT id,username,role,banned,last_login FROM users",[],(err,rows)=>{
     res.json(rows);
   });
 });
 
-/* ---------- ADMIN: BAN / UNBAN ---------- */
-app.post("/api/admin/ban", (req, res) => {
-  if (!req.session.role || req.session.role !== 'admin') return res.sendStatus(403);
-
-  const { userId, banned } = req.body;
-  db.run("UPDATE users SET banned = ? WHERE id = ?", [banned ? 1 : 0, userId], () => res.json({ success: true }));
+/* ---------- ADMIN BAN/UNBAN ---------- */
+app.post("/api/admin/ban", (req,res)=>{
+  if(!req.session.role||req.session.role!=="admin") return res.sendStatus(403);
+  const { userId,banned } = req.body;
+  db.run("UPDATE users SET banned=? WHERE id=?",[banned?1:0,userId],()=>res.json({success:true}));
 });
 
 /* ---------- START SERVER ---------- */
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log("SSP Auth running on port", PORT));
+const PORT = process.env.PORT||3000;
+app.listen(PORT,()=>console.log("SSP Auth running on port",PORT));
