@@ -1,58 +1,53 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<title>Shadow Sites Plus</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<link rel="icon" href="SSP.png">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SSP Login</title>
+  <link rel="icon" href="SSP.png" type="image/x-icon">
+  <style>
+    * { box-sizing: border-box; margin:0; padding:0; font-family: Arial, sans-serif; }
+    body { background: black; color: white; text-align: center; height: 100vh; overflow: hidden; }
 
-<style>
-* { box-sizing: border-box; }
-body { margin: 0; font-family: Arial, sans-serif; background: black; color: #e0c3fc; overflow: hidden; }
-@keyframes pulse { 0% { text-shadow:0 0 5px #9b59b6;} 100%{ text-shadow:0 0 20px #d580ff; } }
+    #authBox { position: absolute; top:50%; left:50%; transform: translate(-50%, -50%); width: 300px; }
 
-/* AUTH BOX */
-#authBox { position: fixed; inset:0; display:flex; align-items:center; justify-content:center; background:black; z-index:10; }
-.panel { width: 320px; padding:25px; background:rgba(0,0,0,0.85); border:2px solid #9b59b6; border-radius:12px; box-shadow:0 0 25px #8e44ad; text-align:center;}
-.panel h2 { margin-top:0; animation: pulse 2s infinite alternate; }
-input { width:100%; padding:10px; margin:8px 0; background:black; border:1px solid #9b59b6; border-radius:6px; color:white; }
-button { margin-top:10px; width:100%; padding:10px; font-weight:bold; border-radius:8px; cursor:pointer; border:2px solid #9b59b6; background:linear-gradient(45deg,#9b59b6,#8e44ad); color:white; box-shadow:0 0 15px #9b59b6; }
-.switch { margin-top:10px; background:none; border:none; color:#a970ff; cursor:pointer; }
-#msg,#msg2{margin-top:10px;color:#ff6b6b;}
-#signupPanel{display:none;}
+    input { width: 100%; padding: 8px; margin: 6px 0; border-radius: 5px; border: 1px solid #fff; background: #222; color: #fff; }
+    button { padding: 8px 12px; margin-top: 8px; cursor: pointer; background:#8e44ad; border:none; color:#fff; border-radius:5px; }
+    .link { color: #9b59b6; cursor:pointer; display:block; margin-top:5px; text-decoration: underline; }
 
-/* APP IFRAME */
-#app{position:fixed; inset:0; display:none;}
-#app iframe{width:100vw;height:100vh;border:none;}
-</style>
+    #app { display:none; width: 100%; height: 100%; }
+    #contentFrame { width:100%; height:100%; border:none; display:block; }
+
+    #msg, #msg2 { color: #ff8080; font-size: 0.9rem; margin-top: 4px; min-height: 18px; }
+  </style>
 </head>
 <body>
 
-<div id="authBox">
-  <div class="panel" id="loginPanel">
-    <h2>SSP Login</h2>
-    <input id="loginUser" placeholder="Username">
-    <input id="loginPass" type="password" placeholder="Password">
-    <button onclick="login()">Login</button>
-    <button class="switch" onclick="showSignup()">Create account</button>
-    <div id="msg"></div>
+  <div id="authBox">
+    <div id="loginPanel">
+      <h2>Login</h2>
+      <input id="loginUser" placeholder="Username">
+      <input id="loginPass" type="password" placeholder="Password">
+      <button onclick="login()">Login</button>
+      <div id="msg"></div>
+      <span class="link" onclick="showSignup()">Sign Up</span>
+    </div>
+
+    <div id="signupPanel" style="display:none;">
+      <h2>Sign Up</h2>
+      <input id="suUser" placeholder="Username">
+      <input id="suEmail" placeholder="Email">
+      <input id="suPass" type="password" placeholder="Password">
+      <button onclick="signup()">Sign Up</button>
+      <div id="msg2"></div>
+      <span class="link" onclick="showLogin()">Back to Login</span>
+    </div>
   </div>
 
-  <div class="panel" id="signupPanel">
-    <h2>SSP Sign Up</h2>
-    <input id="suUser" placeholder="Username">
-    <input id="suEmail" placeholder="Email">
-    <input id="suPass" type="password" placeholder="Password">
-    <button onclick="signup()">Sign Up</button>
-    <button class="switch" onclick="showLogin()">Back to login</button>
-    <div id="msg2"></div>
+  <div id="app">
+    <iframe id="contentFrame"></iframe>
   </div>
-</div>
 
-<div id="app">
-  <iframe src="https://sspv2play.neocities.org/home" allowfullscreen></iframe>
-</div>
-
-<script src="auth.js"></script>
+  <script src="auth.js"></script>
 </body>
 </html>
