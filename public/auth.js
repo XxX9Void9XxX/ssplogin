@@ -12,13 +12,13 @@ function showLogin(){ signupPanel.style.display="none"; loginPanel.style.display
 function enterApp(){ authBox.style.display="none"; app.style.display="block"; loadIframe(); }
 
 /* ---------- CURRENT USER ---------- */
-let currentUser={};
+let currentUser = {};
 async function checkSession(){
   const res = await fetch("/api/me");
   const data = await res.json();
   if(data.loggedIn){
     currentUser = data;
-    if(currentUser.role === "admin") initAdminOverlay(); // allow admin panel after login
+    // Do NOT auto-enter app
   }
 }
 checkSession();
@@ -31,11 +31,10 @@ async function login(){
     body: JSON.stringify({username:loginUser.value,password:loginPass.value})
   });
   const data = await res.json();
-  msg.textContent = data.message||"";
+  msg.textContent = data.message || "";
   if(data.success){
     currentUser = data;
     enterApp();
-    if(currentUser.role === "admin") initAdminOverlay();
   }
 }
 
@@ -47,20 +46,26 @@ async function signup(){
     body: JSON.stringify({username:suUser.value,email:suEmail.value,password:suPass.value})
   });
   const data = await res.json();
-  msg2.textContent = data.message||"Account created!";
-  if(data.role === "admin") initAdminOverlay();
+  msg2.textContent = data.message || "Account created!";
 }
 
 /* ---------- IFRAME ---------- */
 function loadIframe(){
+  contentFrame.style.display="block";
   contentFrame.src = "https://sspv2play.neocities.org/home";
+
+  contentFrame.onload = () => {
+    // Only show admin panel after iframe loads if user is admin
+    if(currentUser.role === "admin") {
+      initAdminOverlay();
+    }
+  };
 }
 
 /* ---------- ADMIN PANEL ---------- */
 function initAdminOverlay(){
   if(document.getElementById("adminBtn")) return;
 
-  // Square admin button
   const btn = document.createElement("button");
   btn.id = "adminBtn";
   btn.textContent = "A";
@@ -127,7 +132,7 @@ function initAdminOverlay(){
           u.banned = !u.banned;
           banBtn.textContent = u.banned ? "Unban" : "Ban";
 
-          // redirect immediately if current user banned
+          // Immediately redirect if the current user is banned
           if(u.username === currentUser.username && u.banned){
             window.location.reload();
           }
@@ -143,5 +148,5 @@ function initAdminOverlay(){
     if(panel.style.display === "block") updatePanel();
   };
 
-  setInterval(()=>{ if(panel.style.display === "block") updatePanel(); }, 5000);
+  setInterval(()=>{ if(panel.style.display==="block") updatePanel(); }, 5000);
 }
