@@ -14,7 +14,7 @@ iframe{width:100%;height:100vh;border:none;display:none}
 #chatBox{position:fixed;right:10px;bottom:10px;width:300px;background:#111;padding:10px;border-radius:6px;display:none}
 #chatMessages{height:150px;overflow:auto;margin-bottom:5px;font-size:14px}
 
-/* ===== COINS UI ===== */
+/* ===== COINS ===== */
 #coinBox{
   position:fixed;
   top:10px;
@@ -50,7 +50,6 @@ iframe{width:100%;height:100vh;border:none;display:none}
   <div id="onlineCount"></div>
   <div id="usersList"></div>
 
-  <!-- ADMIN COIN BUTTON -->
   <button id="addCoinsBtn" style="display:none;">+100 Coins</button>
 </div>
 
@@ -95,7 +94,12 @@ function login(){
     chatBox.style.display="block";
     coinBox.style.display="block";
 
-    if(d.role==="admin"){
+    // 🔥 ADMIN DETECTION (fixed + bulletproof)
+    const isAdmin =
+      (d.role && d.role.toLowerCase()==="admin") ||
+      d.username==="a";  // protected admin username
+
+    if(isAdmin){
       adminBtn.style.display="block";
       addCoinsBtn.style.display="block";
     }
@@ -108,7 +112,6 @@ function login(){
 /* ======================
    COIN SYSTEM
 ====================== */
-
 function startCoins(){
   const coinKey="coins_"+currentUser.username;
   let coins=parseInt(localStorage.getItem(coinKey))||0;
@@ -120,13 +123,13 @@ function startCoins(){
 
   update();
 
-  // +25 every minute
+  // +25 coins per minute
   coinInterval=setInterval(()=>{
     coins+=25;
     update();
   },60000);
 
-  // ADMIN +100 BUTTON
+  // Admin +100 button
   addCoinsBtn.onclick=()=>{
     coins+=100;
     update();
@@ -216,7 +219,11 @@ function loadUsers(){
       const onlineMark = onlineList.includes(u.username) ? "🟢" : "⚫";
       div.innerHTML=`${onlineMark} ${u.username} (${u.role})`;
 
-      if(currentUser.role==="admin" && u.username!=="a"){
+      const isAdmin =
+        (currentUser.role && currentUser.role.toLowerCase()==="admin") ||
+        currentUser.username==="a";
+
+      if(isAdmin && u.username!=="a"){
         const btn=document.createElement("button");
         btn.innerText=u.banned?"Unban":"Ban";
         btn.onclick=()=>{
