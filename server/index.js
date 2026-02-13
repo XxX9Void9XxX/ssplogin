@@ -5,7 +5,6 @@ import { Server } from "socket.io";
 import path from "path";
 import { fileURLToPath } from "url";
 
-// Fix __dirname for ES modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
@@ -15,6 +14,7 @@ const io = new Server(server);
 
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
+app.use(express.static(__dirname));
 
 app.use(session({
     secret: "secret",
@@ -22,13 +22,13 @@ app.use(session({
     saveUninitialized: true
 }));
 
-// ===== IN MEMORY DATA =====
+// ===== MEMORY STORAGE =====
 let users = {};
 let chatMessages = [];
 let onlineUsers = {};
 let cardsOwned = {};
 
-// ===== ADMIN DEFAULT =====
+// ===== DEFAULT ADMIN =====
 users["a"] = { password: "a", coins: 1000, isAdmin: true };
 cardsOwned["a"] = {};
 
@@ -45,7 +45,7 @@ const cards = [
 "https://sspv2play.neocities.org/mtg/c19-51-volrath-the-shapestealer.jpg"
 ];
 
-// ===== COINS EVERY MINUTE =====
+// Coins every minute
 setInterval(() => {
     for (let u in users) {
         users[u].coins += 10;
@@ -127,7 +127,7 @@ app.post("/admin/add500", (req, res) => {
     res.json({ coins: users[username].coins });
 });
 
-// ===== SOCKET CHAT =====
+// ===== SOCKET =====
 io.on("connection", (socket) => {
 
     socket.on("join", (username) => {
@@ -145,9 +145,7 @@ io.on("connection", (socket) => {
         delete onlineUsers[socket.id];
         io.emit("online", Object.values(onlineUsers));
     });
-
 });
 
-// IMPORTANT FOR RENDER
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => console.log("Server running on", PORT));
