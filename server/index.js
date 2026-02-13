@@ -32,38 +32,25 @@ let cardsOwned = {};
 users["a"] = { password: "a", coins: 1000, isAdmin: true };
 cardsOwned["a"] = {};
 
-// ===== CARD LIST =====
-const cards = [
-"https://sspv2play.neocities.org/mtg/vma-4-black-lotus.jpg",
-"https://sspv2play.neocities.org/mtg/fdn-1-sire-of-seven-deaths.jpg",
-"https://sspv2play.neocities.org/mtg/cn2-214-platinum-angel.jpg",
-"https://sspv2play.neocities.org/mtg/ltr-246-the-one-ring.jpg",
-"https://sspv2play.neocities.org/mtg/som-176-mindslaver.jpg",
-"https://sspv2play.neocities.org/mtg/baby-doddin-the-consuming-monstrosity.jpg",
-"https://sspv2play.neocities.org/mtg/orange-master-of-the-elements.jpg",
-"https://sspv2play.neocities.org/mtg/vma-2-time-walk.jpg",
-"https://sspv2play.neocities.org/mtg/c19-51-volrath-the-shapestealer.jpg"
-];
-
 // Coins every minute
 setInterval(() => {
-    for (let u in users) {
-        users[u].coins += 10;
-    }
+    for (let u in users) users[u].coins += 10;
 }, 60000);
 
 // ===== ROUTES =====
 app.get("/", (req, res) => {
-    if (!req.session.username) {
-        return res.sendFile(path.join(__dirname, "login.html"));
-    }
+    if (!req.session.username) return res.sendFile(path.join(__dirname, "login.html"));
     res.sendFile(path.join(__dirname, "home.html"));
+});
+
+app.get("/shop", (req, res) => {
+    if (!req.session.username) return res.redirect("/");
+    res.sendFile(path.join(__dirname, "shop.html"));
 });
 
 app.post("/signup", (req, res) => {
     const { username, password } = req.body;
     if (users[username]) return res.send("User exists");
-
     users[username] = { password, coins: 500, isAdmin: false };
     cardsOwned[username] = {};
     req.session.username = username;
@@ -72,9 +59,7 @@ app.post("/signup", (req, res) => {
 
 app.post("/login", (req, res) => {
     const { username, password } = req.body;
-    if (!users[username] || users[username].password !== password)
-        return res.send("Wrong login");
-
+    if (!users[username] || users[username].password !== password) return res.send("Wrong login");
     req.session.username = username;
     res.redirect("/");
 });
@@ -95,20 +80,23 @@ app.get("/me", (req, res) => {
     });
 });
 
-app.post("/open-pack", (req, res) => {
+// ===== SHOP PACK =====
+const mtgCards = [
+"https://sspv2play.neocities.org/mtg/vma-4-black-lotus.jpg",
+"https://sspv2play.neocities.org/mtg/fdn-1-sire-of-seven-deaths.jpg",
+"https://sspv2play.neocities.org/mtg/cn2-214-platinum-angel.jpg"
+];
+
+app.post("/shop/open-pack", (req, res) => {
     const username = req.session.username;
     if (!username) return res.json({ error: "Not logged in" });
-
-    if (users[username].coins < 100)
-        return res.json({ error: "Not enough coins" });
+    if (users[username].coins < 100) return res.json({ error: "Not enough coins" });
 
     users[username].coins -= 100;
 
-    const pull = cards[Math.floor(Math.random() * cards.length)];
+    const pull = mtgCards[Math.floor(Math.random() * mtgCards.length)];
 
-    if (!cardsOwned[username][pull])
-        cardsOwned[username][pull] = 0;
-
+    if (!cardsOwned[username][pull]) cardsOwned[username][pull] = 0;
     cardsOwned[username][pull]++;
 
     res.json({
@@ -120,16 +108,13 @@ app.post("/open-pack", (req, res) => {
 
 app.post("/admin/add500", (req, res) => {
     const username = req.session.username;
-    if (!username || !users[username].isAdmin)
-        return res.json({ error: "Not admin" });
-
+    if (!username || !users[username].isAdmin) return res.json({ error: "Not admin" });
     users[username].coins += 500;
     res.json({ coins: users[username].coins });
 });
 
 // ===== SOCKET =====
 io.on("connection", (socket) => {
-
     socket.on("join", (username) => {
         onlineUsers[socket.id] = username;
         io.emit("online", Object.values(onlineUsers));
