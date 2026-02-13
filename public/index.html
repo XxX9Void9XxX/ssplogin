@@ -2,235 +2,118 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>SSP Login</title>
+<title>MTG Pack Opener</title>
 <style>
-body{margin:0;background:black;color:white;font-family:Arial}
-#authBox{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%)}
-input{display:block;margin:10px;padding:8px}
-button{padding:8px;margin:5px;cursor:pointer}
-iframe{width:100%;height:100vh;border:none;display:none}
-
-/* ===== NEW SHOP BUTTON ===== */
-#shopBtn{
-  position:fixed;
-  top:10px;
-  left:10px;
-  width:40px;
-  height:40px;
-  background:#9b59b6;
-  color:white;
-  border:none;
-  border-radius:8px;
-  font-size:20px;
-  display:none;
-}
-
-/* ===== ADMIN ===== */
-#adminBtn{
-  position:fixed;
-  bottom:10px;
-  left:10px;
-  width:40px;
-  height:40px;
-  background:#9b59b6;
-  color:white;
-  border:none;
-  border-radius:6px;
-  display:none;
-}
-
-#adminPanel{
-  position:fixed;
-  left:10px;
-  bottom:60px;
-  background:#111;
-  padding:10px;
-  display:none;
-  width:260px;
-  border-radius:6px;
-}
-
-/* ===== CHAT ===== */
-#chatBox{
-  position:fixed;
-  right:10px;
-  bottom:10px;
-  width:300px;
-  background:#111;
-  padding:10px;
-  border-radius:6px;
-  display:none;
-}
-
-#chatMessages{
-  height:150px;
-  overflow:auto;
-  margin-bottom:5px;
-  font-size:14px;
-}
+body{margin:0;background:#000;color:white;font-family:Arial;text-align:center}
+#loginBox{margin-top:100px}
+#game{display:none}
+#stage{position:relative;width:300px;height:460px;margin:20px auto}
+.pack,.card{position:absolute;width:100%;height:100%;background-size:contain;background-repeat:no-repeat;background-position:center;border-radius:10px}
+.pack{cursor:pointer;z-index:2}
+.card{opacity:0}
+#collection{position:fixed;right:10px;top:60px;width:200px;background:#111;padding:10px;max-height:80vh;overflow:auto}
+#coins{font-size:18px;margin:10px}
+#adminBonus{display:none;margin-bottom:10px}
 </style>
 </head>
 <body>
 
-<div id="authBox">
-  <h2>Login</h2>
+<div id="loginBox">
   <input id="username" placeholder="Username">
   <input id="password" type="password" placeholder="Password">
   <button onclick="login()">Login</button>
-  <button onclick="signup()">Sign Up</button>
 </div>
 
-<!-- SHOP BUTTON -->
-<button id="shopBtn" onclick="openShop()">🛒</button>
-
-<iframe id="mainFrame" src="https://sspv2play.neocities.org/home"></iframe>
-
-<button id="adminBtn" onclick="toggleAdmin()">⚙</button>
-
-<div id="adminPanel">
-  <h3>Users</h3>
-  <div id="onlineCount"></div>
-  <div id="usersList"></div>
-</div>
-
-<div id="chatBox">
-  <div id="chatMessages"></div>
-  <input id="chatInput" placeholder="Type message...">
+<div id="game">
+  <div id="coins"></div>
+  <button id="adminBonus" onclick="adminBonus()">+500 Coins</button>
+  <div id="stage">
+    <div class="card" id="card"></div>
+    <div class="pack" id="pack"></div>
+  </div>
+  <div id="collection"></div>
 </div>
 
 <script>
 let currentUser=null;
-let socket=null;
-let onlineList=[];
+let coins=0;
 
-function signup(){
-  fetch("/signup",{method:"POST",headers:{"Content-Type":"application/json"},
-  body:JSON.stringify({
-    username:username.value,
-    password:password.value,
-    email:"x"
-  })}).then(r=>r.json()).then(d=>alert(d.success?"Created":"Error"));
-}
+const pack=document.getElementById("pack");
+const cardDiv=document.getElementById("card");
+
+const packImage="https://sspv2play.neocities.org/mtg/pack.png";
+
+const cards=[
+"https://sspv2play.neocities.org/mtg/vma-4-black-lotus.jpg",
+"https://sspv2play.neocities.org/mtg/fdn-1-sire-of-seven-deaths.jpg",
+"https://sspv2play.neocities.org/mtg/cn2-214-platinum-angel.jpg",
+"https://sspv2play.neocities.org/mtg/ltr-246-the-one-ring.jpg",
+"https://sspv2play.neocities.org/mtg/som-176-mindslaver.jpg",
+"https://sspv2play.neocities.org/mtg/baby-doddin-the-consuming-monstrosity.jpg",
+"https://sspv2play.neocities.org/mtg/orange-master-of-the-elements.jpg",
+"https://sspv2play.neocities.org/mtg/vma-2-time-walk.jpg",
+"https://sspv2play.neocities.org/mtg/c19-51-volrath-the-shapestealer.jpg"
+];
+
+pack.style.backgroundImage=`url(${packImage})`;
 
 function login(){
-  fetch("/login",{method:"POST",headers:{"Content-Type":"application/json"},
-  body:JSON.stringify({
-    username:username.value,
-    password:password.value
-  })}).then(r=>r.json()).then(d=>{
-    if(!d.success) return alert("Login failed");
-
-    currentUser=d;
-
-    authBox.style.display="none";
-    mainFrame.style.display="block";
-    chatBox.style.display="block";
-    shopBtn.style.display="block";
-
-    if(d.role==="admin"){
-      adminBtn.style.display="block";
-    }
-
-    connectSocket();
-  });
+fetch("/login",{method:"POST",headers:{"Content-Type":"application/json"},
+body:JSON.stringify({username:username.value,password:password.value})})
+.then(r=>r.json()).then(d=>{
+if(!d.success)return alert("Login failed");
+currentUser=d.username;
+coins=d.coins;
+loginBox.style.display="none";
+game.style.display="block";
+if(d.role==="admin")adminBonus.style.display="block";
+updateCoins();
+loadUserData();
+});
 }
 
-/* ===== SHOP FUNCTION ===== */
-function openShop(){
-  mainFrame.src="https://sspv2play.neocities.org/mtg/";
+function updateCoins(){
+coinsDiv=document.getElementById("coins");
+coinsDiv.innerText="Coins: "+coins;
 }
 
-/* ===== WEBSOCKET ===== */
-function connectSocket(){
-  const protocol = location.protocol === "https:" ? "wss:" : "ws:";
-  socket=new WebSocket(`${protocol}//${location.host}`);
-
-  socket.onopen=()=>{
-    socket.send(JSON.stringify({
-      type:"join",
-      username:currentUser.username
-    }));
-  };
-
-  socket.onmessage=e=>{
-    const data=JSON.parse(e.data);
-
-    if(data.type==="chatHistory"){
-      chatMessages.innerHTML="";
-      data.history.forEach(msg=>{
-        addMessage(msg.username,msg.message);
-      });
-    }
-
-    if(data.type==="chat"){
-      addMessage(data.username,data.message);
-    }
-
-    if(data.type==="onlineUpdate"){
-      onlineList=data.online;
-      updateOnlineUI();
-    }
-
-    if(data.type==="banned"){
-      alert("You were banned");
-      location.reload();
-    }
-  };
-
-  chatInput.addEventListener("keypress",e=>{
-    if(e.key==="Enter" && chatInput.value.trim()!==""){
-      socket.send(JSON.stringify({
-        type:"chat",
-        username:currentUser.username,
-        role:currentUser.role,
-        message:chatInput.value
-      }));
-      chatInput.value="";
-    }
-  });
+function loadUserData(){
+fetch("/userdata/"+currentUser)
+.then(r=>r.json())
+.then(d=>{
+coins=d.coins;
+updateCoins();
+renderCollection(d.cards);
+});
 }
 
-function addMessage(user,msg){
-  chatMessages.innerHTML+=`<div>&lt;${user}&gt; ${msg}</div>`;
-  chatMessages.scrollTop=chatMessages.scrollHeight;
+function renderCollection(cards){
+const col=document.getElementById("collection");
+col.innerHTML="<h3>Collection</h3>";
+cards.forEach(c=>{
+col.innerHTML+=`
+<div>
+<img src="${c.card}" width="60"><br>
+x${c.count}
+</div><hr>`;
+});
 }
 
-function toggleAdmin(){
-  adminPanel.style.display=
-    adminPanel.style.display==="none"?"block":"none";
-  loadUsers();
-}
+pack.onclick=()=>{
+if(coins<100)return alert("Not enough coins");
+const pull=cards[Math.floor(Math.random()*cards.length)];
+cardDiv.style.backgroundImage=`url(${pull})`;
+cardDiv.style.opacity=1;
 
-function updateOnlineUI(){
-  onlineCount.innerText="Online: "+onlineList.length;
-  loadUsers();
-}
+fetch("/openpack",{method:"POST",headers:{"Content-Type":"application/json"},
+body:JSON.stringify({username:currentUser,card:pull})})
+.then(()=>loadUserData());
+};
 
-function loadUsers(){
-  fetch("/users").then(r=>r.json()).then(d=>{
-    usersList.innerHTML="";
-
-    d.users.forEach(u=>{
-      const div=document.createElement("div");
-      const onlineMark = onlineList.includes(u.username) ? "🟢" : "⚫";
-      div.innerHTML=`${onlineMark} ${u.username} (${u.role})`;
-
-      if(currentUser.role==="admin" && u.username!=="a"){
-        const btn=document.createElement("button");
-        btn.innerText=u.banned?"Unban":"Ban";
-        btn.onclick=()=>{
-          fetch("/"+(u.banned?"unban":"ban"),{
-            method:"POST",
-            headers:{"Content-Type":"application/json"},
-            body:JSON.stringify({username:u.username})
-          });
-        };
-        div.appendChild(btn);
-      }
-
-      usersList.appendChild(div);
-    });
-  });
+function adminBonus(){
+fetch("/adminbonus",{method:"POST",headers:{"Content-Type":"application/json"},
+body:JSON.stringify({username:currentUser})})
+.then(()=>loadUserData());
 }
 </script>
 
