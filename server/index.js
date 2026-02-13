@@ -1,143 +1,146 @@
-import express from "express";
-import cors from "cors";
-import sqlite3 from "sqlite3";
-import { WebSocketServer } from "ws";
-import http from "http";
-import path from "path";
-import { fileURLToPath } from "url";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const express = require("express");
+const session = require("express-session");
+const http = require("http");
+const socketio = require("socket.io");
+const path = require("path");
 
 const app = express();
 const server = http.createServer(app);
-const wss = new WebSocketServer({ server });
+const io = socketio(server);
 
-app.use(cors());
+app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
-app.use(express.static(path.join(__dirname, "../public")));
 
-const db = new sqlite3.Database("./users.db");
+app.use(session({
+    secret: "secret",
+    resave: false,
+    saveUninitialized: true
+}));
 
-db.serialize(() => {
-  db.run(`
-    CREATE TABLE IF NOT EXISTS users (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      username TEXT UNIQUE,
-      password TEXT,
-      role TEXT DEFAULT 'user',
-      coins INTEGER DEFAULT 0
-    )
-  `);
+// ===== IN MEMORY DATA =====
+let users = {};
+let chatMessages = [];
+let onlineUsers = {};
+let cardsOwned = {};
 
-  db.run(`
-    CREATE TABLE IF NOT EXISTS cards (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      username TEXT,
-      card TEXT,
-      count INTEGER DEFAULT 0
-    )
-  `);
+// ===== ADMIN DEFAULT =====
+users["a"] = { password: "a", coins: 1000, isAdmin: true };
+cardsOwned["a"] = {};
 
-  db.get("SELECT * FROM users WHERE username='a'", (err, row) => {
-    if (!row) {
-      db.run("INSERT INTO users (username,password,role,coins) VALUES ('a','a','admin',0)");
-    }
-  });
-});
+// ===== CARD LIST =====
+const cards = [
+"https://sspv2play.neocities.org/mtg/vma-4-black-lotus.jpg",
+"https://sspv2play.neocities.org/mtg/fdn-1-sire-of-seven-deaths.jpg",
+"https://sspv2play.neocities.org/mtg/cn2-214-platinum-angel.jpg",
+"https://sspv2play.neocities.org/mtg/ltr-246-the-one-ring.jpg",
+"https://sspv2play.neocities.org/mtg/som-176-mindslaver.jpg",
+"https://sspv2play.neocities.org/mtg/baby-doddin-the-consuming-monstrosity.jpg",
+"https://sspv2play.neocities.org/mtg/orange-master-of-the-elements.jpg",
+"https://sspv2play.neocities.org/mtg/vma-2-time-walk.jpg",
+"https://sspv2play.neocities.org/mtg/c19-51-volrath-the-shapestealer.jpg"
+];
 
-let onlineUsers = new Set();
-
-/* ===== LOGIN ===== */
-app.post("/login", (req, res) => {
-  const { username, password } = req.body;
-
-  db.get("SELECT * FROM users WHERE username=?", [username], (err, user) => {
-    if (!user || user.password !== password)
-      return res.json({ success: false });
-
-    onlineUsers.add(username);
-
-    res.json({
-      success: true,
-      username,
-      role: user.role,
-      coins: user.coins
-    });
-  });
-});
-
-/* ===== COIN TICK ===== */
+// ===== COINS EVERY MINUTE =====
 setInterval(() => {
-  onlineUsers.forEach(user => {
-    db.run("UPDATE users SET coins = coins + 10 WHERE username=?", [user]);
-  });
+    for (let u in users) {
+        users[u].coins += 10;
+    }
 }, 60000);
 
-/* ===== GET USER DATA ===== */
-app.get("/userdata/:username", (req, res) => {
-  const user = req.params.username;
+// ===== ROUTES =====
+app.get("/", (req, res) => {
+    if (!req.session.username) {
+        return res.sendFile(path.join(__dirname, "login.html"));
+    }
+    res.sendFile(path.join(__dirname, "home.html"));
+});
 
-  db.get("SELECT coins FROM users WHERE username=?", [user], (err, row) => {
-    db.all("SELECT card,count FROM cards WHERE username=?", [user], (err2, cards) => {
-      res.json({
-        coins: row?.coins || 0,
-        cards: cards || []
-      });
+app.post("/signup", (req, res) => {
+    const { username, password } = req.body;
+    if (users[username]) return res.send("User exists");
+
+    users[username] = { password, coins: 500, isAdmin: false };
+    cardsOwned[username] = {};
+    req.session.username = username;
+    res.redirect("/");
+});
+
+app.post("/login", (req, res) => {
+    const { username, password } = req.body;
+    if (!users[username] || users[username].password !== password)
+        return res.send("Wrong login");
+
+    req.session.username = username;
+    res.redirect("/");
+});
+
+app.get("/logout", (req, res) => {
+    req.session.destroy();
+    res.redirect("/");
+});
+
+app.get("/me", (req, res) => {
+    if (!req.session.username) return res.json(null);
+    const u = users[req.session.username];
+    res.json({
+        username: req.session.username,
+        coins: u.coins,
+        isAdmin: u.isAdmin,
+        cards: cardsOwned[req.session.username]
     });
-  });
 });
 
-/* ===== OPEN PACK ===== */
-app.post("/openpack", (req, res) => {
-  const { username, card } = req.body;
+app.post("/open-pack", (req, res) => {
+    const username = req.session.username;
+    if (!username) return res.json({ error: "Not logged in" });
 
-  db.get("SELECT coins FROM users WHERE username=?", [username], (err, row) => {
-    if (!row || row.coins < 100)
-      return res.json({ success: false });
+    if (users[username].coins < 100)
+        return res.json({ error: "Not enough coins" });
 
-    db.run("UPDATE users SET coins = coins - 100 WHERE username=?", [username]);
+    users[username].coins -= 100;
 
-    db.get(
-      "SELECT * FROM cards WHERE username=? AND card=?",
-      [username, card],
-      (err2, existing) => {
-        if (existing) {
-          db.run(
-            "UPDATE cards SET count = count + 1 WHERE username=? AND card=?",
-            [username, card]
-          );
-        } else {
-          db.run(
-            "INSERT INTO cards (username,card,count) VALUES (?,?,1)",
-            [username, card]
-          );
-        }
-      }
-    );
+    const pull = cards[Math.floor(Math.random() * cards.length)];
 
-    res.json({ success: true });
-  });
+    if (!cardsOwned[username][pull])
+        cardsOwned[username][pull] = 0;
+
+    cardsOwned[username][pull]++;
+
+    res.json({
+        card: pull,
+        coins: users[username].coins,
+        cards: cardsOwned[username]
+    });
 });
 
-/* ===== ADMIN BONUS ===== */
-app.post("/adminbonus", (req, res) => {
-  const { username } = req.body;
+app.post("/admin/add500", (req, res) => {
+    const username = req.session.username;
+    if (!username || !users[username].isAdmin)
+        return res.json({ error: "Not admin" });
 
-  db.get("SELECT role FROM users WHERE username=?", [username], (err, row) => {
-    if (row?.role !== "admin")
-      return res.json({ success: false });
-
-    db.run("UPDATE users SET coins = coins + 500 WHERE username=?", [username]);
-    res.json({ success: true });
-  });
+    users[username].coins += 500;
+    res.json({ coins: users[username].coins });
 });
 
-app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "../public/index.html"));
+// ===== SOCKET CHAT =====
+io.on("connection", (socket) => {
+
+    socket.on("join", (username) => {
+        onlineUsers[socket.id] = username;
+        io.emit("online", Object.values(onlineUsers));
+        socket.emit("chat-history", chatMessages);
+    });
+
+    socket.on("message", (msg) => {
+        chatMessages.push(msg);
+        io.emit("message", msg);
+    });
+
+    socket.on("disconnect", () => {
+        delete onlineUsers[socket.id];
+        io.emit("online", Object.values(onlineUsers));
+    });
+
 });
 
-const PORT = process.env.PORT || 10000;
-server.listen(PORT, () =>
-  console.log("MTG COIN SYSTEM RUNNING")
-);
+server.listen(3000, () => console.log("Server running on 3000"));
