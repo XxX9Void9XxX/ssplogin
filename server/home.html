@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html>
+<head>
+<script src="/socket.io/socket.io.js"></script>
+</head>
+<body style="background:black;color:white;font-family:sans-serif">
+
+<button onclick="logout()">Logout</button>
+<h2 id="info"></h2>
+
+<button onclick="openPack()">Open Pack (100 coins)</button>
+<button id="adminBtn" onclick="add500()" style="display:none">+500 Coins</button>
+
+<h3>Collection</h3>
+<div id="collection"></div>
+
+<h3>Chat</h3>
+<div id="chat" style="height:200px;overflow:auto;border:1px solid white"></div>
+<input id="msg"><button onclick="send()">Send</button>
+
+<script>
+const socket = io();
+let username = "";
+
+fetch("/me").then(r=>r.json()).then(data=>{
+    username = data.username;
+    document.getElementById("info").innerText =
+        "User: " + data.username + " | Coins: " + data.coins;
+
+    if(data.isAdmin)
+        document.getElementById("adminBtn").style.display="inline";
+
+    socket.emit("join", username);
+    updateCollection(data.cards);
+});
+
+function logout(){ window.location="/logout"; }
+
+function openPack(){
+fetch("/open-pack",{method:"POST"})
+.then(r=>r.json())
+.then(data=>{
+    if(data.error){ alert(data.error); return; }
+    document.getElementById("info").innerText =
+        "User: " + username + " | Coins: " + data.coins;
+    updateCollection(data.cards);
+});
+}
+
+function add500(){
+fetch("/admin/add500",{method:"POST"})
+.then(r=>r.json())
+.then(data=>{
+    document.getElementById("info").innerText =
+        "User: " + username + " | Coins: " + data.coins;
+});
+}
+
+function updateCollection(cards){
+let div=document.getElementById("collection");
+div.innerHTML="";
+for(let c in cards){
+div.innerHTML+=`<div><img src="${c}" width=80><br>x${cards[c]}</div>`;
+}
+}
+
+function send(){
+let m=document.getElementById("msg").value;
+socket.emit("message",username+": "+m);
+document.getElementById("msg").value="";
+}
+
+socket.on("message",msg=>{
+document.getElementById("chat").innerHTML+=msg+"<br>";
+});
+
+socket.on("chat-history",msgs=>{
+msgs.forEach(m=>{
+document.getElementById("chat").innerHTML+=m+"<br>";
+});
+});
+</script>
+
+</body>
+</html>
