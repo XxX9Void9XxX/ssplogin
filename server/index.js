@@ -1,12 +1,17 @@
-const express = require("express");
-const session = require("express-session");
-const http = require("http");
-const socketio = require("socket.io");
-const path = require("path");
+import express from "express";
+import session from "express-session";
+import http from "http";
+import { Server } from "socket.io";
+import path from "path";
+import { fileURLToPath } from "url";
+
+// Fix __dirname for ES modules
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 const server = http.createServer(app);
-const io = socketio(server);
+const io = new Server(server);
 
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
@@ -143,4 +148,6 @@ io.on("connection", (socket) => {
 
 });
 
-server.listen(3000, () => console.log("Server running on 3000"));
+// IMPORTANT FOR RENDER
+const PORT = process.env.PORT || 3000;
+server.listen(PORT, () => console.log("Server running on", PORT));
