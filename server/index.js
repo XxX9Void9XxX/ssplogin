@@ -27,6 +27,7 @@ app.use(express.static(path.join(__dirname, "../public")));
 
 const db = new sqlite3.Database("./users.db");
 
+// ===== DATABASE SETUP =====
 db.serialize(() => {
   db.run(`
     CREATE TABLE IF NOT EXISTS users (
@@ -48,8 +49,24 @@ db.serialize(() => {
   });
 });
 
+// ===== MEMORY =====
 let onlineUsers = new Set();
 let clients = new Map();
+let chatHistory = []; // stores last 100 messages
+
+// ===== BROADCAST ONLINE USERS =====
+function broadcastOnline() {
+  const payload = JSON.stringify({
+    type: "onlineUpdate",
+    online: Array.from(onlineUsers)
+  });
+
+  wss.clients.forEach(client => {
+    if (client.readyState === 1) {
+      client.send(payload);
+    }
+  });
+}
 
 // ===== SIGNUP =====
 app.post("/signup", (req, res) => {
@@ -87,6 +104,7 @@ app.post("/login", (req, res) => {
       );
 
       onlineUsers.add(username);
+      broadcastOnline();
 
       res.json({
         success: true,
@@ -101,6 +119,7 @@ app.post("/login", (req, res) => {
 app.post("/logout", (req, res) => {
   const { username } = req.body;
   onlineUsers.delete(username);
+  broadcastOnline();
   res.json({ success: true });
 });
 
@@ -127,6 +146,7 @@ app.post("/ban", (req, res) => {
     clients.get(username).close();
   }
 
+  broadcastOnline();
   res.json({ success: true });
 });
 
@@ -137,7 +157,7 @@ app.post("/unban", (req, res) => {
   res.json({ success: true });
 });
 
-// ===== CHAT =====
+// ===== WEBSOCKET CHAT =====
 wss.on("connection", ws => {
   let currentUser = null;
 
@@ -147,19 +167,33 @@ wss.on("connection", ws => {
     if (data.type === "join") {
       currentUser = data.username;
       clients.set(currentUser, ws);
+
+      // SEND CHAT HISTORY
+      ws.send(JSON.stringify({
+        type: "chatHistory",
+        history: chatHistory
+      }));
+
+      broadcastOnline();
       return;
     }
 
     if (data.type === "chat") {
-      const payload = {
+      const chatMessage = {
         type: "chat",
         username: data.role === "admin" ? "Admin" : data.username,
         message: data.message
       };
 
+      // Store last 100 messages
+      chatHistory.push(chatMessage);
+      if (chatHistory.length > 100) {
+        chatHistory.shift();
+      }
+
       wss.clients.forEach(client => {
         if (client.readyState === 1)
-          client.send(JSON.stringify(payload));
+          client.send(JSON.stringify(chatMessage));
       });
     }
   });
@@ -168,6 +202,7 @@ wss.on("connection", ws => {
     if (currentUser) {
       onlineUsers.delete(currentUser);
       clients.delete(currentUser);
+      broadcastOnline();
     }
   });
 });
