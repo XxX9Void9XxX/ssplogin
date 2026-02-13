@@ -26,15 +26,18 @@ app.use(session({
 let users = {};
 let chatMessages = [];
 let onlineUsers = {};
-let cardsOwned = {};
+let coins = {};
 
 // ===== DEFAULT ADMIN =====
-users["a"] = { password: "a", coins: 1000, isAdmin: true };
-cardsOwned["a"] = {};
+users["a"] = { password: "a", isAdmin: true };
+coins["a"] = 1000;
 
 // Coins every minute
 setInterval(() => {
-    for (let u in users) users[u].coins += 10;
+    for (let u in users) {
+        if (!coins[u]) coins[u] = 0;
+        coins[u] += 10;
+    }
 }, 60000);
 
 // ===== ROUTES =====
@@ -43,16 +46,11 @@ app.get("/", (req, res) => {
     res.sendFile(path.join(__dirname, "home.html"));
 });
 
-app.get("/shop", (req, res) => {
-    if (!req.session.username) return res.redirect("/");
-    res.sendFile(path.join(__dirname, "shop.html"));
-});
-
 app.post("/signup", (req, res) => {
     const { username, password } = req.body;
     if (users[username]) return res.send("User exists");
-    users[username] = { password, coins: 500, isAdmin: false };
-    cardsOwned[username] = {};
+    users[username] = { password, isAdmin: false };
+    coins[username] = 500;
     req.session.username = username;
     res.redirect("/");
 });
@@ -71,46 +69,19 @@ app.get("/logout", (req, res) => {
 
 app.get("/me", (req, res) => {
     if (!req.session.username) return res.json(null);
-    const u = users[req.session.username];
     res.json({
         username: req.session.username,
-        coins: u.coins,
-        isAdmin: u.isAdmin,
-        cards: cardsOwned[req.session.username]
+        isAdmin: users[req.session.username].isAdmin,
+        coins: coins[req.session.username] || 0
     });
 });
 
-// ===== SHOP PACK =====
-const mtgCards = [
-"https://sspv2play.neocities.org/mtg/vma-4-black-lotus.jpg",
-"https://sspv2play.neocities.org/mtg/fdn-1-sire-of-seven-deaths.jpg",
-"https://sspv2play.neocities.org/mtg/cn2-214-platinum-angel.jpg"
-];
-
-app.post("/shop/open-pack", (req, res) => {
-    const username = req.session.username;
-    if (!username) return res.json({ error: "Not logged in" });
-    if (users[username].coins < 100) return res.json({ error: "Not enough coins" });
-
-    users[username].coins -= 100;
-
-    const pull = mtgCards[Math.floor(Math.random() * mtgCards.length)];
-
-    if (!cardsOwned[username][pull]) cardsOwned[username][pull] = 0;
-    cardsOwned[username][pull]++;
-
-    res.json({
-        card: pull,
-        coins: users[username].coins,
-        cards: cardsOwned[username]
-    });
-});
-
+// ===== ADMIN BONUS =====
 app.post("/admin/add500", (req, res) => {
     const username = req.session.username;
     if (!username || !users[username].isAdmin) return res.json({ error: "Not admin" });
-    users[username].coins += 500;
-    res.json({ coins: users[username].coins });
+    coins[username] += 500;
+    res.json({ coins: coins[username] });
 });
 
 // ===== SOCKET =====
