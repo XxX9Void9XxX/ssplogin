@@ -1,16 +1,15 @@
 {
-  "name": "ssplogin",
+  "name": "ssp-server",
   "version": "1.0.0",
+  "description": "SSP Login Server",
   "type": "module",
   "main": "index.js",
   "scripts": {
     "start": "node index.js"
   },
   "dependencies": {
-    "cors": "^2.8.5",
     "express": "^4.18.2",
     "express-session": "^1.17.3",
-    "sqlite3": "^5.1.6",
-    "ws": "^8.14.2"
+    "socket.io": "^4.7.5"
   }
 }
