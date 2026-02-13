@@ -9,10 +9,10 @@ body{margin:0;background:black;color:white;font-family:Arial}
 input{display:block;margin:10px;padding:8px}
 button{padding:8px;margin:5px}
 iframe{width:100%;height:100vh;border:none;display:none}
-#adminBtn{position:fixed;bottom:10px;left:10px;width:40px;height:40px;background:#9b59b6;color:white;border:none;border-radius:6px;display:none}
-#adminPanel{position:fixed;left:10px;bottom:60px;background:#111;padding:10px;display:none;width:250px}
-#chatBox{position:fixed;right:10px;bottom:10px;width:300px;background:#111;padding:10px}
-#chatMessages{height:150px;overflow:auto;margin-bottom:5px}
+#adminBtn{position:fixed;bottom:10px;left:10px;width:40px;height:40px;background:#9b59b6;color:white;border:none;border-radius:6px;display:none;cursor:pointer}
+#adminPanel{position:fixed;left:10px;bottom:60px;background:#111;padding:10px;display:none;width:260px;border-radius:6px}
+#chatBox{position:fixed;right:10px;bottom:10px;width:300px;background:#111;padding:10px;border-radius:6px;display:none}
+#chatMessages{height:150px;overflow:auto;margin-bottom:5px;font-size:14px}
 </style>
 </head>
 <body>
@@ -35,7 +35,7 @@ iframe{width:100%;height:100vh;border:none;display:none}
   <div id="usersList"></div>
 </div>
 
-<div id="chatBox" style="display:none">
+<div id="chatBox">
   <div id="chatMessages"></div>
   <input id="chatInput" placeholder="Type message...">
 </div>
@@ -43,6 +43,7 @@ iframe{width:100%;height:100vh;border:none;display:none}
 <script>
 let currentUser=null;
 let socket=null;
+let onlineList=[];
 
 function signup(){
   fetch("/signup",{method:"POST",headers:{"Content-Type":"application/json"},
@@ -62,58 +63,98 @@ function login(){
     if(!d.success) return alert("Login failed");
 
     currentUser=d;
+
     authBox.style.display="none";
     mainFrame.style.display="block";
     chatBox.style.display="block";
 
-    if(d.role==="admin") adminBtn.style.display="block";
+    if(d.role==="admin"){
+      adminBtn.style.display="block";
+    }
 
-    socket=new WebSocket(`wss://${location.host}`);
-    socket.onopen=()=>socket.send(JSON.stringify({
-      type:"join",
-      username:d.username
-    }));
-
-    socket.onmessage=e=>{
-      const data=JSON.parse(e.data);
-      if(data.type==="chat"){
-        chatMessages.innerHTML+=`<div>&lt;${data.username}&gt; ${data.message}</div>`;
-      }
-      if(data.type==="banned"){
-        alert("You were banned");
-        location.reload();
-      }
-    };
-
-    chatInput.addEventListener("keypress",e=>{
-      if(e.key==="Enter"){
-        socket.send(JSON.stringify({
-          type:"chat",
-          username:d.username,
-          role:d.role,
-          message:chatInput.value
-        }));
-        chatInput.value="";
-      }
-    });
-
-    loadUsers();
+    connectSocket();
   });
+}
+
+function connectSocket(){
+  const protocol = location.protocol === "https:" ? "wss:" : "ws:";
+  socket=new WebSocket(`${protocol}//${location.host}`);
+
+  socket.onopen=()=>{
+    socket.send(JSON.stringify({
+      type:"join",
+      username:currentUser.username
+    }));
+  };
+
+  socket.onmessage=e=>{
+    const data=JSON.parse(e.data);
+
+    // ===== CHAT HISTORY =====
+    if(data.type==="chatHistory"){
+      chatMessages.innerHTML="";
+      data.history.forEach(msg=>{
+        addMessage(msg.username,msg.message);
+      });
+    }
+
+    // ===== NEW CHAT MESSAGE =====
+    if(data.type==="chat"){
+      addMessage(data.username,data.message);
+    }
+
+    // ===== ONLINE UPDATE =====
+    if(data.type==="onlineUpdate"){
+      onlineList=data.online;
+      updateOnlineUI();
+    }
+
+    // ===== BANNED =====
+    if(data.type==="banned"){
+      alert("You were banned");
+      location.reload();
+    }
+  };
+
+  chatInput.addEventListener("keypress",e=>{
+    if(e.key==="Enter" && chatInput.value.trim()!==""){
+      socket.send(JSON.stringify({
+        type:"chat",
+        username:currentUser.username,
+        role:currentUser.role,
+        message:chatInput.value
+      }));
+      chatInput.value="";
+    }
+  });
+}
+
+function addMessage(user,msg){
+  chatMessages.innerHTML+=`<div>&lt;${user}&gt; ${msg}</div>`;
+  chatMessages.scrollTop=chatMessages.scrollHeight;
 }
 
 function toggleAdmin(){
   adminPanel.style.display=
     adminPanel.style.display==="none"?"block":"none";
+  loadUsers();
+}
+
+function updateOnlineUI(){
+  onlineCount.innerText="Online: "+onlineList.length;
+  loadUsers();
 }
 
 function loadUsers(){
   fetch("/users").then(r=>r.json()).then(d=>{
-    onlineCount.innerText="Online: "+d.onlineCount;
     usersList.innerHTML="";
+
     d.users.forEach(u=>{
       const div=document.createElement("div");
-      div.innerHTML=`${u.username} (${u.role})`;
-      if(u.username!=="a"){
+      const onlineMark = onlineList.includes(u.username) ? "🟢" : "⚫";
+      div.innerHTML=`${onlineMark} ${u.username} (${u.role})`;
+
+      if(currentUser.role==="admin" && u.username!=="a"){
         const btn=document.createElement("button");
         btn.innerText=u.banned?"Unban":"Ban";
         btn.onclick=()=>{
@@ -121,10 +162,11 @@ function loadUsers(){
             method:"POST",
             headers:{"Content-Type":"application/json"},
             body:JSON.stringify({username:u.username})
-          }).then(loadUsers);
+          });
         };
         div.appendChild(btn);
       }
+
       usersList.appendChild(div);
     });
   });
