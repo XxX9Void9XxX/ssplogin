@@ -27,7 +27,7 @@ app.use(express.static(path.join(__dirname, "../public")));
 
 const db = new sqlite3.Database("./users.db");
 
-// ===== DATABASE SETUP =====
+// ===== DATABASE =====
 db.serialize(() => {
   db.run(`
     CREATE TABLE IF NOT EXISTS users (
@@ -49,12 +49,11 @@ db.serialize(() => {
   });
 });
 
-// ===== MEMORY =====
 let onlineUsers = new Set();
 let clients = new Map();
-let chatHistory = []; // stores last 100 messages
+let chatHistory = [];
 
-// ===== BROADCAST ONLINE USERS =====
+// ===== BROADCAST ONLINE =====
 function broadcastOnline() {
   const payload = JSON.stringify({
     type: "onlineUpdate",
@@ -93,10 +92,15 @@ app.post("/login", (req, res) => {
     "SELECT * FROM users WHERE username=?",
     [username],
     (err, user) => {
-      if (!user) return res.json({ success: false });
-      if (user.banned) return res.json({ success: false, banned: true });
+
+      if (!user)
+        return res.json({ success: false, message: "Login failed" });
+
+      if (user.banned)
+        return res.json({ success: false, banned: true, message: "You Have Been Banned" });
+
       if (user.password !== password)
-        return res.json({ success: false });
+        return res.json({ success: false, message: "Login failed" });
 
       db.run(
         "UPDATE users SET lastLogin=? WHERE username=?",
@@ -115,30 +119,22 @@ app.post("/login", (req, res) => {
   );
 });
 
-// ===== LOGOUT =====
-app.post("/logout", (req, res) => {
-  const { username } = req.body;
-  onlineUsers.delete(username);
-  broadcastOnline();
-  res.json({ success: true });
-});
-
 // ===== USERS LIST =====
 app.get("/users", (req, res) => {
   db.all("SELECT username,role,banned,lastLogin FROM users", (err, rows) => {
-    res.json({
-      users: rows,
-      onlineCount: onlineUsers.size
-    });
+    res.json({ users: rows });
   });
 });
 
-// ===== BAN =====
+// ===== BAN (ADMIN ONLY) =====
 app.post("/ban", (req, res) => {
-  const { username } = req.body;
+  const { username, admin } = req.body;
+
+  if (admin !== "a") return res.json({ success: false });
   if (username === "a") return res.json({ success: false });
 
   db.run("UPDATE users SET banned=1 WHERE username=?", [username]);
+
   onlineUsers.delete(username);
 
   if (clients.has(username)) {
@@ -150,14 +146,18 @@ app.post("/ban", (req, res) => {
   res.json({ success: true });
 });
 
-// ===== UNBAN =====
+// ===== UNBAN (ADMIN ONLY) =====
 app.post("/unban", (req, res) => {
-  const { username } = req.body;
+  const { username, admin } = req.body;
+
+  if (admin !== "a") return res.json({ success: false });
+
   db.run("UPDATE users SET banned=0 WHERE username=?", [username]);
+
   res.json({ success: true });
 });
 
-// ===== WEBSOCKET CHAT =====
+// ===== WEBSOCKET =====
 wss.on("connection", ws => {
   let currentUser = null;
 
@@ -168,7 +168,6 @@ wss.on("connection", ws => {
       currentUser = data.username;
       clients.set(currentUser, ws);
 
-      // SEND CHAT HISTORY
       ws.send(JSON.stringify({
         type: "chatHistory",
         history: chatHistory
@@ -185,11 +184,8 @@ wss.on("connection", ws => {
         message: data.message
       };
 
-      // Store last 100 messages
       chatHistory.push(chatMessage);
-      if (chatHistory.length > 100) {
-        chatHistory.shift();
-      }
+      if (chatHistory.length > 100) chatHistory.shift();
 
       wss.clients.forEach(client => {
         if (client.readyState === 1)
