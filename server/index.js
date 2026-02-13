@@ -1,5 +1,4 @@
 import express from "express";
-import session from "express-session";
 import cors from "cors";
 import sqlite3 from "sqlite3";
 import { WebSocketServer } from "ws";
@@ -16,18 +15,10 @@ const wss = new WebSocketServer({ server });
 
 app.use(cors());
 app.use(express.json());
-
-app.use(session({
-  secret: "ssp-secret",
-  resave: false,
-  saveUninitialized: false
-}));
-
 app.use(express.static(path.join(__dirname, "../public")));
 
 const db = new sqlite3.Database("./users.db");
 
-// ===== DATABASE SETUP =====
 db.serialize(() => {
   db.run(`
     CREATE TABLE IF NOT EXISTS users (
@@ -35,175 +26,110 @@ db.serialize(() => {
       username TEXT UNIQUE,
       password TEXT,
       role TEXT DEFAULT 'user',
-      banned INTEGER DEFAULT 0,
-      lastLogin TEXT
+      coins INTEGER DEFAULT 0
+    )
+  `);
+
+  db.run(`
+    CREATE TABLE IF NOT EXISTS cards (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      username TEXT,
+      card TEXT,
+      count INTEGER DEFAULT 0
     )
   `);
 
   db.get("SELECT * FROM users WHERE username='a'", (err, row) => {
     if (!row) {
-      db.run(
-        "INSERT INTO users (username,password,role) VALUES ('a','a','admin')"
-      );
+      db.run("INSERT INTO users (username,password,role,coins) VALUES ('a','a','admin',0)");
     }
   });
 });
 
-// ===== MEMORY =====
 let onlineUsers = new Set();
-let clients = new Map();
-let chatHistory = []; // stores last 100 messages
 
-// ===== BROADCAST ONLINE USERS =====
-function broadcastOnline() {
-  const payload = JSON.stringify({
-    type: "onlineUpdate",
-    online: Array.from(onlineUsers)
-  });
-
-  wss.clients.forEach(client => {
-    if (client.readyState === 1) {
-      client.send(payload);
-    }
-  });
-}
-
-// ===== SIGNUP =====
-app.post("/signup", (req, res) => {
-  const { username, password, email } = req.body;
-
-  if (!username || !password || !email)
-    return res.json({ success: false });
-
-  db.run(
-    "INSERT INTO users (username,password) VALUES (?,?)",
-    [username, password],
-    err => {
-      if (err) return res.json({ success: false });
-      res.json({ success: true });
-    }
-  );
-});
-
-// ===== LOGIN =====
+/* ===== LOGIN ===== */
 app.post("/login", (req, res) => {
   const { username, password } = req.body;
 
-  db.get(
-    "SELECT * FROM users WHERE username=?",
-    [username],
-    (err, user) => {
-      if (!user) return res.json({ success: false });
-      if (user.banned) return res.json({ success: false, banned: true });
-      if (user.password !== password)
-        return res.json({ success: false });
+  db.get("SELECT * FROM users WHERE username=?", [username], (err, user) => {
+    if (!user || user.password !== password)
+      return res.json({ success: false });
 
-      db.run(
-        "UPDATE users SET lastLogin=? WHERE username=?",
-        [new Date().toISOString(), username]
-      );
+    onlineUsers.add(username);
 
-      onlineUsers.add(username);
-      broadcastOnline();
-
-      res.json({
-        success: true,
-        username,
-        role: user.role
-      });
-    }
-  );
-});
-
-// ===== LOGOUT =====
-app.post("/logout", (req, res) => {
-  const { username } = req.body;
-  onlineUsers.delete(username);
-  broadcastOnline();
-  res.json({ success: true });
-});
-
-// ===== USERS LIST =====
-app.get("/users", (req, res) => {
-  db.all("SELECT username,role,banned,lastLogin FROM users", (err, rows) => {
     res.json({
-      users: rows,
-      onlineCount: onlineUsers.size
+      success: true,
+      username,
+      role: user.role,
+      coins: user.coins
     });
   });
 });
 
-// ===== BAN =====
-app.post("/ban", (req, res) => {
-  const { username } = req.body;
-  if (username === "a") return res.json({ success: false });
-
-  db.run("UPDATE users SET banned=1 WHERE username=?", [username]);
-  onlineUsers.delete(username);
-
-  if (clients.has(username)) {
-    clients.get(username).send(JSON.stringify({ type: "banned" }));
-    clients.get(username).close();
-  }
-
-  broadcastOnline();
-  res.json({ success: true });
-});
-
-// ===== UNBAN =====
-app.post("/unban", (req, res) => {
-  const { username } = req.body;
-  db.run("UPDATE users SET banned=0 WHERE username=?", [username]);
-  res.json({ success: true });
-});
-
-// ===== WEBSOCKET CHAT =====
-wss.on("connection", ws => {
-  let currentUser = null;
-
-  ws.on("message", message => {
-    const data = JSON.parse(message);
-
-    if (data.type === "join") {
-      currentUser = data.username;
-      clients.set(currentUser, ws);
-
-      // SEND CHAT HISTORY
-      ws.send(JSON.stringify({
-        type: "chatHistory",
-        history: chatHistory
-      }));
-
-      broadcastOnline();
-      return;
-    }
-
-    if (data.type === "chat") {
-      const chatMessage = {
-        type: "chat",
-        username: data.role === "admin" ? "Admin" : data.username,
-        message: data.message
-      };
-
-      // Store last 100 messages
-      chatHistory.push(chatMessage);
-      if (chatHistory.length > 100) {
-        chatHistory.shift();
-      }
-
-      wss.clients.forEach(client => {
-        if (client.readyState === 1)
-          client.send(JSON.stringify(chatMessage));
-      });
-    }
+/* ===== COIN TICK ===== */
+setInterval(() => {
+  onlineUsers.forEach(user => {
+    db.run("UPDATE users SET coins = coins + 10 WHERE username=?", [user]);
   });
+}, 60000);
 
-  ws.on("close", () => {
-    if (currentUser) {
-      onlineUsers.delete(currentUser);
-      clients.delete(currentUser);
-      broadcastOnline();
-    }
+/* ===== GET USER DATA ===== */
+app.get("/userdata/:username", (req, res) => {
+  const user = req.params.username;
+
+  db.get("SELECT coins FROM users WHERE username=?", [user], (err, row) => {
+    db.all("SELECT card,count FROM cards WHERE username=?", [user], (err2, cards) => {
+      res.json({
+        coins: row?.coins || 0,
+        cards: cards || []
+      });
+    });
+  });
+});
+
+/* ===== OPEN PACK ===== */
+app.post("/openpack", (req, res) => {
+  const { username, card } = req.body;
+
+  db.get("SELECT coins FROM users WHERE username=?", [username], (err, row) => {
+    if (!row || row.coins < 100)
+      return res.json({ success: false });
+
+    db.run("UPDATE users SET coins = coins - 100 WHERE username=?", [username]);
+
+    db.get(
+      "SELECT * FROM cards WHERE username=? AND card=?",
+      [username, card],
+      (err2, existing) => {
+        if (existing) {
+          db.run(
+            "UPDATE cards SET count = count + 1 WHERE username=? AND card=?",
+            [username, card]
+          );
+        } else {
+          db.run(
+            "INSERT INTO cards (username,card,count) VALUES (?,?,1)",
+            [username, card]
+          );
+        }
+      }
+    );
+
+    res.json({ success: true });
+  });
+});
+
+/* ===== ADMIN BONUS ===== */
+app.post("/adminbonus", (req, res) => {
+  const { username } = req.body;
+
+  db.get("SELECT role FROM users WHERE username=?", [username], (err, row) => {
+    if (row?.role !== "admin")
+      return res.json({ success: false });
+
+    db.run("UPDATE users SET coins = coins + 500 WHERE username=?", [username]);
+    res.json({ success: true });
   });
 });
 
@@ -213,5 +139,5 @@ app.get("*", (req, res) => {
 
 const PORT = process.env.PORT || 10000;
 server.listen(PORT, () =>
-  console.log("SSP FULL SYSTEM running on port", PORT)
+  console.log("MTG COIN SYSTEM RUNNING")
 );
