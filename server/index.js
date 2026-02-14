@@ -1,3 +1,4 @@
+// server/index.js
 import express from "express";
 import session from "express-session";
 import cors from "cors";
@@ -40,6 +41,7 @@ db.serialize(() => {
     )
   `);
 
+  // Permanent admin account
   db.get("SELECT * FROM users WHERE username='script.add.user'", (err, row) => {
     if (!row) {
       db.run(
@@ -54,7 +56,7 @@ let onlineUsers = new Set();
 let clients = new Map();
 let chatHistory = [];
 
-// ===== BROADCAST ONLINE =====
+// ===== BROADCAST ONLINE USERS =====
 function broadcastOnline() {
   const payload = JSON.stringify({
     type: "onlineUpdate",
@@ -62,117 +64,113 @@ function broadcastOnline() {
   });
 
   wss.clients.forEach(client => {
-    if (client.readyState === 1) client.send(payload);
+    if (client.readyState === 1) {
+      client.send(payload);
+    }
   });
 }
 
 // ===== SIGNUP =====
 app.post("/signup", (req, res) => {
-  const { username, password, email } = req.body;
-  if (!username || !password || !email) return res.json({ success: false });
+  const { username, password } = req.body;
 
-  db.run("INSERT INTO users (username,password) VALUES (?,?)", [username, password], err => {
-    if (err) return res.json({ success: false });
-    res.json({ success: true });
-  });
+  if (!username || !password)
+    return res.json({ success: false });
+
+  db.run(
+    "INSERT INTO users (username,password) VALUES (?,?)",
+    [username, password],
+    err => {
+      if (err) return res.json({ success: false });
+      res.json({ success: true });
+    }
+  );
 });
 
 // ===== LOGIN =====
 app.post("/login", (req, res) => {
   const { username, password } = req.body;
-  db.get("SELECT * FROM users WHERE username=?", [username], (err, user) => {
-    if (!user) return res.json({ success: false });
-    if (user.banned) return res.json({ success: false, banned: true });
-    if (user.password !== password) return res.json({ success: false });
 
-    db.run("UPDATE users SET lastLogin=? WHERE username=?", [new Date().toISOString(), username]);
+  db.get(
+    "SELECT * FROM users WHERE username=?",
+    [username],
+    (err, user) => {
+      if (!user) return res.json({ success: false });
+      if (user.banned) return res.json({ success: false, banned: true });
+      if (user.password !== password) return res.json({ success: false });
 
-    onlineUsers.add(username);
-    broadcastOnline();
+      db.run(
+        "UPDATE users SET lastLogin=? WHERE username=?",
+        [new Date().toISOString(), username]
+      );
 
-    res.json({ success: true, username, role: user.role });
-  });
+      onlineUsers.add(username);
+      broadcastOnline();
+
+      res.json({
+        success: true,
+        username,
+        role: user.role
+      });
+    }
+  );
 });
 
-// ===== LOGOUT =====
-app.post("/logout", (req, res) => {
-  const { username } = req.body;
-  onlineUsers.delete(username);
-  broadcastOnline();
-  res.json({ success: true });
-});
-
-// ===== USERS LIST =====
+// ===== USERS =====
 app.get("/users", (req, res) => {
   db.all("SELECT username,role,banned,lastLogin FROM users", (err, rows) => {
-    res.json({ users: rows, onlineCount: onlineUsers.size });
+    res.json({ users: rows });
   });
 });
 
-// ===== BAN =====
+// ===== BAN / UNBAN =====
 app.post("/ban", (req, res) => {
   const { username } = req.body;
   if (username === "script.add.user") return res.json({ success: false });
 
   db.run("UPDATE users SET banned=1 WHERE username=?", [username]);
   onlineUsers.delete(username);
-
   if (clients.has(username)) {
     clients.get(username).send(JSON.stringify({ type: "banned" }));
     clients.get(username).close();
   }
-
   broadcastOnline();
   res.json({ success: true });
 });
 
-// ===== UNBAN =====
 app.post("/unban", (req, res) => {
   const { username } = req.body;
   db.run("UPDATE users SET banned=0 WHERE username=?", [username]);
   res.json({ success: true });
 });
 
-// ===== WEBSOCKET CHAT WITH COOLDOWN =====
-const chatCooldown = new Map();
-
+// ===== WEBSOCKET CHAT =====
 wss.on("connection", ws => {
   let currentUser = null;
 
-  ws.on("message", message => {
-    const data = JSON.parse(message);
+  ws.on("message", msg => {
+    const data = JSON.parse(msg);
 
     if (data.type === "join") {
       currentUser = data.username;
       clients.set(currentUser, ws);
-
       ws.send(JSON.stringify({ type: "chatHistory", history: chatHistory }));
       broadcastOnline();
       return;
     }
 
     if (data.type === "chat") {
-      const now = Date.now();
-      if (!chatCooldown.has(currentUser)) chatCooldown.set(currentUser, { lastTime: 0, lastMsg: "" });
-      const cd = chatCooldown.get(currentUser);
-
-      if (now - cd.lastTime < 15000) return; // 15s cooldown
-      if (data.message === cd.lastMsg && now - cd.lastTime < 30000) return; // 30s same msg cooldown
-
-      cd.lastTime = now;
-      cd.lastMsg = data.message;
-
-      const chatMessage = {
+      const chatMsg = {
         type: "chat",
         username: data.role === "admin" ? "Admin" : data.username,
         message: data.message
       };
 
-      chatHistory.push(chatMessage);
+      chatHistory.push(chatMsg);
       if (chatHistory.length > 100) chatHistory.shift();
 
-      wss.clients.forEach(client => {
-        if (client.readyState === 1) client.send(JSON.stringify(chatMessage));
+      wss.clients.forEach(c => {
+        if (c.readyState === 1) c.send(JSON.stringify(chatMsg));
       });
     }
   });
@@ -186,10 +184,9 @@ wss.on("connection", ws => {
   });
 });
 
-// ===== CATCH ALL =====
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "../public/index.html"));
 });
 
 const PORT = process.env.PORT || 10000;
-server.listen(PORT, () => console.log("SSP FULL SYSTEM running on port", PORT));
+server.listen(PORT, () => console.log("SSP running on port", PORT));
