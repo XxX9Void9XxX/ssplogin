@@ -29,13 +29,24 @@ iframe{width:100%;height:100vh;border:none;display:none}
 /* ===== STORE BUTTON ===== */
 #storeBtn{position:fixed;top:50px;left:10px;background:#222;color:white;border:1px solid #9b59b6;padding:8px 12px;border-radius:6px;cursor:pointer;display:none;z-index:9999}
 
-/* ===== STORE ===== */
-#storePanel{position:fixed;top:90px;left:10px;width:300px;background:#111;padding:10px;border-radius:6px;color:white;display:none;z-index:9999;max-height:70vh;overflow:auto}
+/* ===== STORE PANEL ===== */
+#storePanel{position:fixed;top:90px;left:10px;width:320px;background:#111;padding:10px;border-radius:6px;color:white;display:none;z-index:9999;max-height:70vh;overflow:auto}
 .storeItem{display:flex;justify-content:space-between;align-items:center;margin-bottom:5px}
 .storeItem button{padding:4px 8px;margin-left:5px}
 
 /* ===== FULLSCREEN IFRAME ===== */
 #homeFrame{width:100%;height:100vh;border:none;display:none}
+
+/* ===== MTG PACK ANIMATION ===== */
+#packStage{position:relative;width:300px;height:460px;margin-top:10px;}
+.pack, .card{position:absolute;width:100%;height:100%;border-radius:10px;background-size:contain;background-repeat:no-repeat;background-position:center;}
+.pack{z-index:3;cursor:pointer;}
+.card{z-index:1;opacity:0;}
+#slash{position:absolute;top:30%;left:-200%;width:220%;height:6px;background:linear-gradient(90deg, transparent, white, transparent);z-index:5;opacity:0;}
+.fire{position:absolute;width:12px;height:12px;border-radius:50%;animation:fire 1.2s forwards;}
+@keyframes fire{0%{transform:scale(1);opacity:1}100%{transform:scale(0) translateY(-120px);opacity:0}}
+@keyframes burnAway{to{opacity:0;transform:scale(0.85)}}
+#resetBtn{display:none;margin:10px auto;padding:10px 18px;font-size:16px;cursor:pointer;background:#000;color:white;border:1px solid #555;}
 </style>
 </head>
 <body>
@@ -122,15 +133,9 @@ function login(){
 function startCoins(){
   const key="coins_"+currentUser.username;
   let coins=parseInt(localStorage.getItem(key))||0;
-
-  function update(){
-    coinCount.innerText=coins;
-    localStorage.setItem(key,coins);
-  }
+  function update(){coinCount.innerText=coins;localStorage.setItem(key,coins);}
   update();
-
   coinInterval=setInterval(()=>{coins+=25;update();},60000);
-
   addCoinsBtn.onclick=()=>{coins+=100;update();}
 }
 
@@ -157,7 +162,6 @@ function connectSocket(){
       if(chatInput.value===lastMessage && now-lastTime<30000) return;
       lastMessage=chatInput.value;
       lastTime=now;
-
       socket.send(JSON.stringify({type:"chat",username:currentUser.username,role:currentUser.role,message:chatInput.value}));
       chatInput.value="";
     }
@@ -223,7 +227,7 @@ function loadIframe(){
 }
 
 /* ======================
-   STORE PANEL
+   STORE PANEL WITH MTG PACK
 ====================== */
 const items=[
   {name:"MTG Pack",cost:100,img:"https://sspv2play.neocities.org/mtg/pack.png"}
@@ -245,12 +249,74 @@ function loadStore(){
       if(coins<item.cost){alert("Not enough coins");return;}
       coins-=item.cost;localStorage.setItem(key,coins);coinCount.innerText=coins;
 
-      inventory[item.name]=inventory[item.name]?inventory[item.name]+1:1;
-      alert(`Bought ${item.name}! You now have ${inventory[item.name]}`);
+      showPackOpener(item.name);
     };
     div.appendChild(btn);
     storePanel.appendChild(div);
   });
+}
+
+/* ======================
+   MTG PACK OPENER
+====================== */
+function showPackOpener(packName){
+  const stage = document.createElement("div");
+  stage.id="packStage";
+  storePanel.appendChild(stage);
+
+  const card = document.createElement("div");
+  card.className="card";
+  stage.appendChild(card);
+
+  const pack = document.createElement("div");
+  pack.className="pack";
+  stage.appendChild(pack);
+
+  const slash = document.createElement("div");
+  slash.id="slash";
+  stage.appendChild(slash);
+
+  const resetBtn = document.createElement("button");
+  resetBtn.id="resetBtn";
+  resetBtn.innerText="Open Another Pack";
+  storePanel.appendChild(resetBtn);
+
+  const packImage="https://sspv2play.neocities.org/mtg/pack.png";
+  const cards=[
+    "https://sspv2play.neocities.org/mtg/vma-4-black-lotus.jpg",
+    "https://sspv2play.neocities.org/mtg/fdn-1-sire-of-seven-deaths.jpg",
+    "https://sspv2play.neocities.org/mtg/cn2-214-platinum-angel.jpg",
+    "https://sspv2play.neocities.org/mtg/ltr-246-the-one-ring.jpg",
+    "https://sspv2play.neocities.org/mtg/som-176-mindslaver.jpg",
+    "https://sspv2play.neocities.org/mtg/baby-doddin-the-consuming-monstrosity.jpg",
+    "https://sspv2play.neocities.org/mtg/orange-master-of-the-elements.jpg",
+    "https://sspv2play.neocities.org/mtg/vma-2-time-walk.jpg",
+    "https://sspv2play.neocities.org/mtg/c19-51-volrath-the-shapestealer.jpg"
+  ];
+
+  let opened=false;
+  function loadImg(src,callback){const img=new Image();img.onload=()=>callback(src);img.src=src;}
+  loadImg(packImage,img=>pack.style.backgroundImage=`url(${img})`);
+
+  pack.onclick=()=>{
+    if(opened) return;
+    opened=true;
+    const pull=cards[Math.floor(Math.random()*cards.length)];
+    loadImg(pull,img=>card.style.backgroundImage=`url(${img})`);
+
+    slash.style.transition="none";slash.style.opacity=1;slash.style.left="-200%";
+    setTimeout(()=>{slash.style.transition="left 0.25s ease-out";slash.style.left="200%";},40);
+    setTimeout(()=>slash.style.opacity=0,350);
+    setTimeout(spawnFire,250);
+    setTimeout(()=>pack.style.animation="burnAway 1s forwards",450);
+    setTimeout(()=>{card.style.opacity=1; resetBtn.style.display="block";},1400);
+
+    inventory[packName]=inventory[packName]?inventory[packName]+1:1;
+    alert(`You opened a ${packName}! You now have ${inventory[packName]}`);
+  };
+
+  resetBtn.onclick=()=>{stage.remove();resetBtn.remove();}
+  function spawnFire(){for(let i=0;i<80;i++){const f=document.createElement("div");f.className="fire";f.style.left=Math.random()*300+"px";f.style.top=Math.random()*460+"px";f.style.background=`hsl(${Math.random()*45},100%,50%)`;stage.appendChild(f);setTimeout(()=>f.remove(),1200);}}
 }
 </script>
 </body>
