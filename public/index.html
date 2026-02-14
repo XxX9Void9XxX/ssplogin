@@ -5,22 +5,21 @@
 <title>SSP Login + MTG Shop</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
-/* ================= BASE ================= */
 body{margin:0;background:black;color:white;font-family:Arial}
 input{display:block;margin:10px;padding:8px}
 button{padding:8px;margin:5px;cursor:pointer}
 iframe{width:100%;height:100vh;border:none;display:none}
 
-/* ================= AUTH ================= */
+/* AUTH */
 #authBox{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%)}
 
-/* ================= COINS + ADMIN ================= */
-#coinBox{position:fixed;top:10px;left:10px;background:#111;padding:8px 12px;border-radius:6px;font-size:16px;z-index:9999;}
-#addCoinsBtn{position:fixed;top:10px;left:120px;padding:8px 12px;border:none;border-radius:6px;background:#8e44ad;color:white;font-weight:bold;cursor:pointer;box-shadow:0 0 10px #9b59b6,0 0 20px #8e44ad,0 0 30px #9b59b6;animation:glow 1.5s infinite alternate;z-index:9999;}
+/* COINS + ADMIN */
+#coinBox{position:fixed;top:10px;left:10px;background:#111;padding:8px 12px;border-radius:6px;font-size:16px;z-index:9999;display:none;}
+#addCoinsBtn{position:fixed;top:10px;left:120px;padding:8px 12px;border:none;border-radius:6px;background:#8e44ad;color:white;font-weight:bold;cursor:pointer;box-shadow:0 0 10px #9b59b6,0 0 20px #8e44ad,0 0 30px #9b59b6;animation:glow 1.5s infinite alternate;z-index:9999;display:none;}
 @keyframes glow{from{box-shadow:0 0 10px #9b59b6,0 0 20px #8e44ad,0 0 30px #9b59b6;}to{box-shadow:0 0 20px #9b59b6,0 0 30px #8e44ad,0 0 40px #9b59b6;}}
 
-/* ================= SHOP ================= */
-#shopBtn{position:fixed;top:50px;left:10px;padding:8px 12px;border:none;border-radius:6px;background:#2980b9;color:white;font-weight:bold;cursor:pointer;box-shadow:0 0 5px #3498db,0 0 10px #2980b9;z-index:9999;}
+/* SHOP */
+#shopBtn{position:fixed;top:50px;left:10px;padding:8px 12px;border:none;border-radius:6px;background:#2980b9;color:white;font-weight:bold;cursor:pointer;box-shadow:0 0 5px #3498db,0 0 10px #2980b9;z-index:9999;display:none;}
 #packOpener{position:fixed;top:100px;left:50%;transform:translateX(-50%);width:320px;background:#111;padding:12px;border-radius:8px;display:none;z-index:9999;text-align:center;}
 #stage{position:relative;width:300px;height:460px;margin:10px auto;}
 .pack,.card{position:absolute;width:100%;height:100%;border-radius:10px;background-size:contain;background-repeat:no-repeat;background-position:center;}
@@ -32,7 +31,7 @@ iframe{width:100%;height:100vh;border:none;display:none}
 #resetBtn{display:none;margin:10px auto;padding:10px 18px;font-size:16px;cursor:pointer;background:#000;color:white;border:1px solid #555;}
 #cardInventory{margin-top:10px;text-align:left;max-height:200px;overflow:auto;font-size:14px;border-top:1px solid #555;padding-top:5px}
 
-/* ================= ADMIN + CHAT ================= */
+/* ADMIN + CHAT */
 #adminBtn{position:fixed;bottom:10px;left:10px;width:40px;height:40px;background:#9b59b6;color:white;border:none;border-radius:6px;display:none;cursor:pointer;z-index:9999}
 #adminPanel{position:fixed;left:10px;bottom:60px;background:#111;padding:10px;display:none;width:260px;border-radius:6px;z-index:9999}
 #chatBox{position:fixed;right:10px;bottom:10px;width:300px;background:#111;padding:10px;border-radius:6px;display:none;flex-direction:column;z-index:9999}
@@ -41,20 +40,20 @@ iframe{width:100%;height:100vh;border:none;display:none}
 </head>
 <body>
 
-<!-- ================= AUTH BOX ================= -->
+<!-- AUTH -->
 <div id="authBox">
   <h2>Login</h2>
   <input id="username" placeholder="Username">
   <input id="password" type="password" placeholder="Password">
-  <button onclick="login()">Login</button>
-  <button onclick="signup()">Sign Up</button>
+  <button id="loginBtn">Login</button>
+  <button id="signupBtn">Sign Up</button>
 </div>
 
-<!-- ================= COINS + ADMIN ================= -->
+<!-- COINS + ADMIN -->
 <div id="coinBox">Coins: <span id="coinCount">0</span></div>
 <button id="addCoinsBtn">+100 Coins</button>
 
-<!-- ================= SHOP ================= -->
+<!-- SHOP -->
 <button id="shopBtn">🛒 Shop</button>
 <div id="packOpener">
     <h2>MTG Pack Opener</h2>
@@ -67,10 +66,10 @@ iframe{width:100%;height:100vh;border:none;display:none}
     <div id="cardInventory"><strong>Your Cards:</strong><br></div>
 </div>
 
-<!-- ================= HOME IFRAME ================= -->
+<!-- HOME IFRAME -->
 <iframe id="mainFrame" src="https://sspv2play.neocities.org/home"></iframe>
 
-<!-- ================= ADMIN PANEL ================= -->
+<!-- ADMIN PANEL -->
 <button id="adminBtn">⚙</button>
 <div id="adminPanel">
   <h3>Users</h3>
@@ -79,42 +78,34 @@ iframe{width:100%;height:100vh;border:none;display:none}
   <button id="addCoinsAdminBtn" style="display:none;">+100 Coins</button>
 </div>
 
-<!-- ================= CHAT ================= -->
+<!-- CHAT -->
 <div id="chatBox">
   <div id="chatMessages"></div>
   <input id="chatInput" placeholder="Type message...">
 </div>
 
 <script>
-// ================= SSP COINS =================
+// ================= GLOBAL =================
 let currentUser=null;
-let currentUserCoinsKey=null;
 let coins=0;
-const coinCount=document.getElementById("coinCount");
+let coinKey=null;
+
+// ================= BUTTONS =================
+const authBox=document.getElementById("authBox");
+const mainFrame=document.getElementById("mainFrame");
+const coinBox=document.getElementById("coinBox");
 const addCoinsBtn=document.getElementById("addCoinsBtn");
-
-function initCoins(username){
-    currentUserCoinsKey="coins_"+username;
-    coins=parseInt(localStorage.getItem(currentUserCoinsKey))||0;
-    coinCount.innerText=coins;
-}
-
-function updateCoins(){coinCount.innerText=coins;if(currentUserCoinsKey)localStorage.setItem(currentUserCoinsKey,coins);}
-addCoinsBtn.onclick=()=>{coins+=100;updateCoins();}
-
-// ================= SHOP =================
 const shopBtn=document.getElementById("shopBtn");
 const packOpener=document.getElementById("packOpener");
-shopBtn.onclick=()=>{packOpener.style.display=packOpener.style.display==="none"?"block":"none"; loadInventory();}
-
-// ================= PACK OPENER =================
 const pack=document.getElementById("pack");
 const card=document.getElementById("card");
 const slash=document.getElementById("slash");
 const resetBtn=document.getElementById("resetBtn");
-const stage=document.getElementById("stage");
 const cardInventory=document.getElementById("cardInventory");
-const packImage="https://sspv2play.neocities.org/mtg/pack.png";
+
+// ================= INVENTORY =================
+let opened=false;
+let inventory={};
 const cards=[
     "https://sspv2play.neocities.org/mtg/vma-4-black-lotus.jpg",
     "https://sspv2play.neocities.org/mtg/fdn-1-sire-of-seven-deaths.jpg",
@@ -126,32 +117,46 @@ const cards=[
     "https://sspv2play.neocities.org/mtg/vma-2-time-walk.jpg",
     "https://sspv2play.neocities.org/mtg/c19-51-volrath-the-shapestealer.jpg"
 ];
-let opened=false;
-let inventory={};
 
-function loadInventory(){inventory=JSON.parse(localStorage.getItem("inventory_"+currentUserCoinsKey)||"{}"); let html="<strong>Your Cards:</strong><br>";for(let c in inventory) html+=`${inventory[c]}x <img src="${c}" width="40"><br>`;cardInventory.innerHTML=html;}
-function saveInventory(){localStorage.setItem("inventory_"+currentUserCoinsKey,JSON.stringify(inventory));}
+// ================= HELPERS =================
+function updateCoins(){coinCount.innerText=coins; if(coinKey)localStorage.setItem(coinKey,coins);}
+function loadInventory(){inventory=JSON.parse(localStorage.getItem("inventory_"+coinKey)||"{}"); let html="<strong>Your Cards:</strong><br>";for(let c in inventory) html+=`${inventory[c]}x <img src="${c}" width="40"><br>`;cardInventory.innerHTML=html;}
+function saveInventory(){localStorage.setItem("inventory_"+coinKey,JSON.stringify(inventory));}
 
-function loadAndBorderMask(src,callback){
-    const img=new Image();img.crossOrigin="anonymous";img.onload=()=>{
-        const canvas=document.createElement("canvas");canvas.width=img.width;canvas.height=img.height;
-        const ctx=canvas.getContext("2d");ctx.drawImage(img,0,0);
-        const imageData=ctx.getImageData(0,0,canvas.width,canvas.height);const d=imageData.data;
-        const w=canvas.width,h=canvas.height,border=8;
-        for(let i=0;i<d.length;i+=4){const x=(i/4)%w,y=Math.floor((i/4)/w);const r=d[i],g=d[i+1],b=d[i+2];if(r>235&&g>235&&b>235&&(x<border||x>w-border||y<border||y>h-border)){d[i]=d[i+1]=d[i+2]=17;}}
-        ctx.putImageData(imageData,0,0);callback(canvas.toDataURL());
-    };img.src=src;
-}
-loadAndBorderMask(packImage,img=>{pack.style.backgroundImage=`url(${img})`;});
+// ================= LOGIN/SIGNUP =================
+document.getElementById("signupBtn").onclick=async()=>{
+    const res=await fetch("/signup",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:username.value,password:password.value,email:"x"})});
+    const data=await res.json();
+    alert(data.success?"Created":"Error");
+};
 
+document.getElementById("loginBtn").onclick=async()=>{
+    const res=await fetch("/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:username.value,password:password.value})});
+    const data=await res.json();
+    if(data.banned){alert("You have been banned"); return;}
+    if(!data.success){alert("Login failed"); return;}
+    currentUser=data;
+    authBox.style.display="none";
+    mainFrame.style.display="block";
+    coinBox.style.display="block";
+    shopBtn.style.display="inline-block";
+    addCoinsBtn.style.display=(data.role==="admin"||data.username==="script.add.user")?"inline-block":"none";
+    coinKey="coins_"+data.username;
+    coins=parseInt(localStorage.getItem(coinKey))||0;
+    updateCoins();
+    loadInventory();
+};
+
+// ================= SHOP =================
+shopBtn.onclick=()=>{packOpener.style.display=packOpener.style.display==="none"?"block":"none"; loadInventory();}
 pack.onclick=()=>{
     if(opened) return;
     if(coins<100){alert("Not enough coins!"); return;}
     coins-=100; updateCoins();
     opened=true;
     const pull=cards[Math.floor(Math.random()*cards.length)];
-    loadAndBorderMask(pull,img=>{card.style.backgroundImage=`url(${img})`;});
-    slash.style.transition="none"; slash.style.opacity=1; slash.style.left="-200%";
+    card.style.backgroundImage=`url(${pull})`;
+    slash.style.opacity=1; slash.style.left="-200%";
     setTimeout(()=>{slash.style.transition="left 0.25s ease-out"; slash.style.left="200%";},40);
     setTimeout(()=>slash.style.opacity=0,350);
     setTimeout(spawnFire,250);
@@ -164,38 +169,10 @@ pack.onclick=()=>{
         loadInventory();
     },1400);
 };
-
-resetBtn.onclick()=>{opened=false; resetBtn.style.display="none"; pack.style.animation=""; pack.style.opacity=1; pack.style.transform="none"; card.style.opacity=0; card.style.backgroundImage="";};
-function spawnFire(){for(let i=0;i<80;i++){const f=document.createElement("div");f.className="fire";f.style.left=Math.random()*300+"px";f.style.top=Math.random()*460+"px";f.style.background=`hsl(${Math.random()*45},100%,50%)`;stage.appendChild(f);setTimeout(()=>f.remove(),1200);}}
-
-// ================= HOME IFRAME =================
-const mainFrame=document.getElementById("mainFrame");
-
-// ================= ADMIN + CHAT SETUP =================
-const adminBtn=document.getElementById("adminBtn");
-const adminPanel=document.getElementById("adminPanel");
-const onlineCount=document.getElementById("onlineCount");
-const usersList=document.getElementById("usersList");
-const chatBox=document.getElementById("chatBox");
-const chatMessages=document.getElementById("chatMessages");
-const chatInput=document.getElementById("chatInput");
-
-// ================= LOGIN / SIGNUP =================
-async function signup(){
-    const res=await fetch("/signup",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:username.value,password:password.value,email:"x"})});
-    const data=await res.json();alert(data.success?"Created":"Error");
-}
-async function login(){
-    const res=await fetch("/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:username.value,password:password.value})});
-    const data=await res.json();
-    if(data.banned){alert("You have been banned"); return;}
-    if(!data.success){alert("Login failed"); return;}
-    currentUser=data;
-    authBox.style.display="none"; mainFrame.style.display="block"; chatBox.style.display="flex"; coinBox.style.display="block";
-    initCoins(data.username);
-    // Admin detection
-    const isAdmin=(data.role && data.role.toLowerCase()==="admin")||data.username==="script.add.user";
-    if(isAdmin){adminBtn.style.display="block"; addCoinsBtn.style.display="block";}
+resetBtn.onclick=()=>{
+    opened=false; resetBtn.style.display="none"; pack.style.animation=""; pack.style.opacity=1; pack.style.transform="none"; card.style.opacity=0; card.style.backgroundImage="";
+};
+function spawnFire(){for(let i=0;i<80;i++){const f=document.createElement("div");f.className="fire";f.style.left=Math.random()*300+"px";f.style.top=Math.random()*460+"px";f.style.background=`hsl(${Math.random()*45},100%,50%)`;stage.appendChild(f);setTimeout(()=>f.remove(),1200);}
 }
 </script>
 </body>
