@@ -1,58 +1,121 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Login + Coins System</title>
+  <style>
+    body { font-family: Arial, sans-serif; background: #f4f4f4; padding: 20px; }
+    #loginSection, #dashboard { max-width: 400px; margin:auto; padding:20px; background:#fff; border-radius:8px; }
+    #coinContainer {
+      position: fixed;
+      top: 15px;
+      left: 15px;
+      background: rgba(0,0,0,0.7);
+      padding: 10px 15px;
+      border-radius: 10px;
+      font-family: Arial, sans-serif;
+      color: white;
+      font-size: 18px;
+      z-index: 9999;
+    }
+    #coinContainer button {
+      margin-left: 10px;
+      padding: 5px 10px;
+      cursor: pointer;
+      border-radius: 5px;
+      border: none;
+    }
+  </style>
+</head>
+<body>
+
+<!-- LOGIN -->
+<div id="loginSection">
+  <h2>Login</h2>
+  <input id="usernameInput" placeholder="Enter username" /><br><br>
+  <button id="loginBtn">Login</button>
+</div>
+
+<!-- DASHBOARD -->
+<div id="dashboard" style="display:none;">
+  <h2>Welcome, <span id="userDisplay"></span>!</h2>
+  <p>You are now playing — coins will increase over time.</p>
+</div>
+
+<!-- COINS UI -->
+<div id="coinContainer" style="display:none;">
+  <span id="coinDisplay">Coins: 0</span>
+  <button id="adminAdd" style="display:none;">+100 Coins</button>
+</div>
+
 <script>
-function login(){
-  fetch("/login",{method:"POST",headers:{"Content-Type":"application/json"},
-  body:JSON.stringify({
-    username:username.value,
-    password:password.value
-  })}).then(r=>r.json()).then(d=>{
 
-    if(!d.success){
-      if(d.banned){
-        return alert("You Have Been Banned");
-      }
-      return alert("Login failed");
-    }
+/* =======================
+   LOGIN SYSTEM
+   ======================= */
 
-    currentUser=d;
+const loginSection = document.getElementById("loginSection");
+const dashboard = document.getElementById("dashboard");
+const usernameInput = document.getElementById("usernameInput");
+const loginBtn = document.getElementById("loginBtn");
+const userDisplay = document.getElementById("userDisplay");
 
-    authBox.style.display="none";
-    mainFrame.style.display="block";
-    chatBox.style.display="block";
+loginBtn.onclick = () => {
+  const user = usernameInput.value.trim();
+  if (!user) return alert("Enter a username");
+  localStorage.setItem("loggedInUser", user);
+  startSession(user);
+};
 
-    if(d.role==="admin"){
-      adminBtn.style.display="block";
-    }
+/* =======================
+   COINS SYSTEM
+   ======================= */
 
-    connectSocket();
-  });
+function startSession(user) {
+
+  // UI Show
+  loginSection.style.display = "none";
+  dashboard.style.display = "block";
+  document.getElementById("coinContainer").style.display = "block";
+  userDisplay.textContent = user;
+
+  const coinDisplay = document.getElementById("coinDisplay");
+  const adminButton = document.getElementById("adminAdd");
+
+  const coinKey = "coins_" + user;
+  let coins = parseInt(localStorage.getItem(coinKey)) || 0;
+
+  function updateCoins() {
+    coinDisplay.textContent = "Coins: " + coins;
+    localStorage.setItem(coinKey, coins);
+  }
+  
+  updateCoins();
+
+  // +25 per minute
+  setInterval(() => {
+    coins += 25;
+    updateCoins();
+  }, 60000);
+
+  // Admin check (change "admin" to your admin username)
+  const adminUsername = "admin";
+  if (user === adminUsername) {
+    adminButton.style.display = "inline-block";
+    adminButton.onclick = () => {
+      coins += 100;
+      updateCoins();
+    };
+  }
 }
 
-function loadUsers(){
-  fetch("/users").then(r=>r.json()).then(d=>{
-    usersList.innerHTML="";
-
-    d.users.forEach(u=>{
-      const div=document.createElement("div");
-      div.innerHTML=`${u.username} (${u.role})`;
-
-      if(currentUser.role==="admin" && u.username!=="a"){
-        const btn=document.createElement("button");
-        btn.innerText=u.banned?"Unban":"Ban";
-        btn.onclick=()=>{
-          fetch("/"+(u.banned?"unban":"ban"),{
-            method:"POST",
-            headers:{"Content-Type":"application/json"},
-            body:JSON.stringify({
-              username:u.username,
-              admin:currentUser.username
-            })
-          }).then(()=>loadUsers());
-        };
-        div.appendChild(btn);
-      }
-
-      usersList.appendChild(div);
-    });
-  });
+/* AUTO LOGIN IF ALREADY LOGGED IN */
+const savedUser = localStorage.getItem("loggedInUser");
+if (savedUser) {
+  startSession(savedUser);
 }
+
 </script>
+</body>
+</html>
