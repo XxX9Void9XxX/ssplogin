@@ -50,7 +50,6 @@ app.post("/login", (req, res) => {
 
     let user = users.find(u => u.username === username);
 
-    // Create new user if not exists
     if (!user) {
         user = {
             username,
@@ -140,12 +139,10 @@ wss.on("connection", ws => {
     ws.on("message", (message) => {
         const data = JSON.parse(message);
 
-        // Join
         if (data.type === "join") {
             onlineUsers.add(data.username);
         }
 
-        // Chat broadcast
         if (data.type === "chat") {
             wss.clients.forEach(client => {
                 if (client.readyState === 1) {
@@ -158,17 +155,12 @@ wss.on("connection", ws => {
             });
         }
 
-        // Online list
         if (data.type === "getOnline") {
             ws.send(JSON.stringify({
                 type: "online",
                 users: Array.from(onlineUsers)
             }));
         }
-    });
-
-    ws.on("close", () => {
-        // Optional: could remove from onlineUsers if tracking per connection
     });
 });
 
