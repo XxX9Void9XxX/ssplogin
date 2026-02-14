@@ -1,234 +1,153 @@
-import express from "express";
-import session from "express-session";
-import cors from "cors";
-import sqlite3 from "sqlite3";
-import { WebSocketServer } from "ws";
-import http from "http";
-import path from "path";
-import { fileURLToPath } from "url";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const express = require("express");
+const http = require("http");
+const WebSocket = require("ws");
 
 const app = express();
 const server = http.createServer(app);
-const wss = new WebSocketServer({ server });
+const wss = new WebSocket.Server({ server });
 
-app.use(cors());
 app.use(express.json());
+app.use(express.static("public"));
 
-app.use(session({
-  secret: "ssp-secret",
-  resave: false,
-  saveUninitialized: false
-}));
-
-app.use(express.static(path.join(__dirname, "../public")));
-
-const db = new sqlite3.Database("./users.db");
-
-// ===== DATABASE SETUP =====
-db.serialize(() => {
-  db.run(`
-    CREATE TABLE IF NOT EXISTS users (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      username TEXT UNIQUE,
-      password TEXT,
-      role TEXT DEFAULT 'user',
-      banned INTEGER DEFAULT 0,
-      lastLogin TEXT
-    )
-  `);
-
-  // Ensure permanent admin account exists
-  const adminUsername = "script.add.user";
-  const adminPassword = "script=admin";
-
-  db.get("SELECT * FROM users WHERE username=?", [adminUsername], (err, row) => {
-    if (!row) {
-      db.run(
-        "INSERT INTO users (username,password,role) VALUES (?,?,?)",
-        [adminUsername, adminPassword, "admin"]
-      );
-    } else if (row.role !== "admin") {
-      // Ensure this user is always admin
-      db.run("UPDATE users SET role='admin' WHERE username=?", [adminUsername]);
-    }
-  });
-});
-
-// ===== MEMORY =====
+let users = [];
+let bannedUsers = [];
 let onlineUsers = new Set();
-let clients = new Map();
-let chatHistory = []; // stores last 100 messages
 
-// ===== BROADCAST ONLINE USERS =====
-function broadcastOnline() {
-  const payload = JSON.stringify({
-    type: "onlineUpdate",
-    online: Array.from(onlineUsers)
-  });
+/* Permanent Admin */
+const ADMIN_USER = "script.add.user";
+const ADMIN_PASS = "script=admin";
 
-  wss.clients.forEach(client => {
-    if (client.readyState === 1) {
-      client.send(payload);
-    }
-  });
-}
-
-// ===== SIGNUP =====
-app.post("/signup", (req, res) => {
-  const { username, password, email } = req.body;
-
-  if (!username || !password || !email)
-    return res.json({ success: false });
-
-  db.run(
-    "INSERT INTO users (username,password) VALUES (?,?)",
-    [username, password],
-    err => {
-      if (err) return res.json({ success: false });
-      res.json({ success: true });
-    }
-  );
-});
-
-// ===== LOGIN =====
+/* Login */
 app.post("/login", (req, res) => {
-  const { username, password } = req.body;
+    const { username, password } = req.body;
 
-  db.get(
-    "SELECT * FROM users WHERE username=?",
-    [username],
-    (err, user) => {
-      if (!user) return res.json({ success: false });
-      if (user.banned) return res.json({ success: false, banned: true });
-      if (user.password !== password)
+    if (bannedUsers.includes(username)) {
+        return res.json({ success: false, message: "You are banned." });
+    }
+
+    if (username === ADMIN_USER && password === ADMIN_PASS) {
+        let admin = users.find(u => u.username === ADMIN_USER);
+        if (!admin) {
+            admin = {
+                username: ADMIN_USER,
+                password: ADMIN_PASS,
+                coins: 1000,
+                inventory: {},
+                isAdmin: true
+            };
+            users.push(admin);
+        }
+        return res.json({ success: true, user: admin });
+    }
+
+    let user = users.find(u => u.username === username);
+
+    if (!user) {
+        user = {
+            username,
+            password,
+            coins: 200,
+            inventory: {},
+            isAdmin: false
+        };
+        users.push(user);
+    }
+
+    if (user.password !== password) {
+        return res.json({ success: false, message: "Wrong password." });
+    }
+
+    res.json({ success: true, user });
+});
+
+/* Add Coins (Admin Only) */
+app.post("/add-coins", (req, res) => {
+    const { admin, target } = req.body;
+
+    const adminUser = users.find(u => u.username === admin);
+    if (!adminUser || !adminUser.isAdmin) {
         return res.json({ success: false });
-
-      // Ensure permanent admin stays admin on login
-      if (username === "script.add.user" && user.role !== "admin") {
-        db.run("UPDATE users SET role='admin' WHERE username=?", [username]);
-        user.role = "admin";
-      }
-
-      db.run(
-        "UPDATE users SET lastLogin=? WHERE username=?",
-        [new Date().toISOString(), username]
-      );
-
-      onlineUsers.add(username);
-      broadcastOnline();
-
-      res.json({
-        success: true,
-        username,
-        role: user.role
-      });
     }
-  );
+
+    const targetUser = users.find(u => u.username === target);
+    if (!targetUser) return res.json({ success: false });
+
+    targetUser.coins += 100;
+    res.json({ success: true, coins: targetUser.coins });
 });
 
-// ===== LOGOUT =====
-app.post("/logout", (req, res) => {
-  const { username } = req.body;
-  onlineUsers.delete(username);
-  broadcastOnline();
-  res.json({ success: true });
-});
+/* Buy Pack */
+app.post("/buy-pack", (req, res) => {
+    const { username } = req.body;
+    const user = users.find(u => u.username === username);
 
-// ===== USERS LIST =====
-app.get("/users", (req, res) => {
-  db.all("SELECT username,role,banned,lastLogin FROM users", (err, rows) => {
+    if (!user || user.coins < 100) {
+        return res.json({ success: false });
+    }
+
+    user.coins -= 100;
+
+    const cards = [
+        "Black Lotus",
+        "Time Walk",
+        "Platinum Angel",
+        "The One Ring",
+        "Mindslaver"
+    ];
+
+    const card = cards[Math.floor(Math.random() * cards.length)];
+
+    if (!user.inventory[card]) user.inventory[card] = 0;
+    user.inventory[card]++;
+
     res.json({
-      users: rows,
-      onlineCount: onlineUsers.size
+        success: true,
+        card,
+        coins: user.coins,
+        inventory: user.inventory
     });
-  });
 });
 
-// ===== BAN =====
+/* Ban */
 app.post("/ban", (req, res) => {
-  const { username } = req.body;
+    const { admin, target } = req.body;
+    const adminUser = users.find(u => u.username === admin);
+    if (!adminUser || !adminUser.isAdmin) return res.json({ success: false });
 
-  // Prevent banning the permanent admin
-  if (username === "script.add.user") return res.json({ success: false });
-
-  db.run("UPDATE users SET banned=1 WHERE username=?", [username]);
-  onlineUsers.delete(username);
-
-  if (clients.has(username)) {
-    clients.get(username).send(JSON.stringify({ type: "banned" }));
-    clients.get(username).close();
-  }
-
-  broadcastOnline();
-  res.json({ success: true });
+    bannedUsers.push(target);
+    res.json({ success: true });
 });
 
-// ===== UNBAN =====
-app.post("/unban", (req, res) => {
-  const { username } = req.body;
-  db.run("UPDATE users SET banned=0 WHERE username=?", [username]);
-  res.json({ success: true });
-});
-
-// ===== WEBSOCKET CHAT =====
+/* WebSocket */
 wss.on("connection", ws => {
-  let currentUser = null;
+    ws.on("message", msg => {
+        const data = JSON.parse(msg);
 
-  ws.on("message", message => {
-    const data = JSON.parse(message);
+        if (data.type === "join") {
+            onlineUsers.add(data.username);
+        }
 
-    if (data.type === "join") {
-      currentUser = data.username;
-      clients.set(currentUser, ws);
+        if (data.type === "chat") {
+            wss.clients.forEach(client => {
+                if (client.readyState === WebSocket.OPEN) {
+                    client.send(JSON.stringify({
+                        type: "chat",
+                        username: data.username,
+                        message: data.message
+                    }));
+                }
+            });
+        }
 
-      // SEND CHAT HISTORY
-      ws.send(JSON.stringify({
-        type: "chatHistory",
-        history: chatHistory
-      }));
+        if (data.type === "getOnline") {
+            ws.send(JSON.stringify({
+                type: "online",
+                users: Array.from(onlineUsers)
+            }));
+        }
+    });
 
-      broadcastOnline();
-      return;
-    }
-
-    if (data.type === "chat") {
-      const chatMessage = {
-        type: "chat",
-        username: data.role === "admin" ? "Admin" : data.username,
-        message: data.message
-      };
-
-      // Store last 100 messages
-      chatHistory.push(chatMessage);
-      if (chatHistory.length > 100) {
-        chatHistory.shift();
-      }
-
-      wss.clients.forEach(client => {
-        if (client.readyState === 1)
-          client.send(JSON.stringify(chatMessage));
-      });
-    }
-  });
-
-  ws.on("close", () => {
-    if (currentUser) {
-      onlineUsers.delete(currentUser);
-      clients.delete(currentUser);
-      broadcastOnline();
-    }
-  });
+    ws.on("close", () => {});
 });
 
-// ===== SERVE FRONTEND =====
-app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "../public/index.html"));
-});
-
-const PORT = process.env.PORT || 10000;
-server.listen(PORT, () =>
-  console.log("SSP FULL SYSTEM running on port", PORT)
-);
+server.listen(3000, () => console.log("Server running"));
