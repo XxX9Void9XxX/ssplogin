@@ -14,7 +14,7 @@ iframe{width:100%;height:100vh;border:none;display:none}
 #chatBox{position:fixed;right:10px;bottom:10px;width:300px;background:#111;padding:10px;border-radius:6px;display:none}
 #chatMessages{height:150px;overflow:auto;margin-bottom:5px;font-size:14px}
 
-/* ===== COINS ===== */
+/* ===== COINS & ADMIN BUTTON ===== */
 #coinBox{
   position:fixed;
   top:10px;
@@ -25,6 +25,29 @@ iframe{width:100%;height:100vh;border:none;display:none}
   font-size:16px;
   display:none;
   z-index:9999;
+}
+
+/* glowing +100 coins button */
+#addCoinsBtn{
+  position:fixed;
+  top:10px;
+  left:120px;
+  padding:8px 12px;
+  border:none;
+  border-radius:6px;
+  background:#8e44ad;
+  color:white;
+  font-weight:bold;
+  cursor:pointer;
+  box-shadow: 0 0 10px #9b59b6, 0 0 20px #8e44ad, 0 0 30px #9b59b6;
+  animation: glow 1.5s infinite alternate;
+  display:none;
+  z-index:9999;
+}
+
+@keyframes glow {
+  from { box-shadow: 0 0 10px #9b59b6, 0 0 20px #8e44ad, 0 0 30px #9b59b6; }
+  to   { box-shadow: 0 0 20px #9b59b6, 0 0 30px #8e44ad, 0 0 40px #9b59b6; }
 }
 </style>
 </head>
@@ -40,6 +63,7 @@ iframe{width:100%;height:100vh;border:none;display:none}
 
 <!-- COINS DISPLAY -->
 <div id="coinBox">Coins: <span id="coinCount">0</span></div>
+<button id="addCoinsBtn">+100 Coins</button>
 
 <iframe id="mainFrame" src="https://sspv2play.neocities.org/home"></iframe>
 
@@ -49,8 +73,6 @@ iframe{width:100%;height:100vh;border:none;display:none}
   <h3>Users</h3>
   <div id="onlineCount"></div>
   <div id="usersList"></div>
-
-  <button id="addCoinsBtn" style="display:none;">+100 Coins</button>
 </div>
 
 <div id="chatBox">
@@ -85,7 +107,13 @@ function login(){
     username:username.value,
     password:password.value
   })}).then(r=>r.json()).then(d=>{
-    if(!d.success) return alert("Login failed");
+    if(!d.success){
+      if(d.banned){
+        alert("You have been banned");
+        return;
+      }
+      return alert("Login failed");
+    }
 
     currentUser=d;
 
@@ -94,7 +122,7 @@ function login(){
     chatBox.style.display="block";
     coinBox.style.display="block";
 
-    // 🔥 ADMIN DETECTION (fixed + bulletproof)
+    // 🔥 ADMIN DETECTION
     const isAdmin =
       (d.role && d.role.toLowerCase()==="admin") ||
       d.username==="a";  // protected admin username
@@ -234,7 +262,6 @@ function loadUsers(){
           })
           .then(res => res.json())
           .then(() => {
-            // refresh UI after action
             u.banned = !u.banned;        // flip banned state
             btn.innerText = u.banned ? "Unban" : "Ban";
           });
