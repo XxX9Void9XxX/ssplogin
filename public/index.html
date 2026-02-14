@@ -2,227 +2,176 @@
 <html>
 <head>
 <meta charset="UTF-8">
-<title>SSP Login</title>
+<title>SSP MTG Pack Opener</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
 <style>
 body{margin:0;background:black;color:white;font-family:Arial}
-#authBox{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%)}
-input{display:block;margin:10px;padding:8px}
-button{padding:8px;margin:5px}
-iframe{border:none; display:none; width:100vw; height:100vh;}
-#adminBtn{position:fixed;bottom:10px;left:10px;width:40px;height:40px;background:#9b59b6;color:white;border:none;border-radius:6px;display:none;cursor:pointer}
-#adminPanel{position:fixed;left:10px;bottom:60px;background:#111;padding:10px;display:none;width:260px;border-radius:6px}
-#chatBox{position:fixed;right:10px;bottom:10px;width:300px;background:#111;padding:10px;border-radius:6px;display:none}
-#chatMessages{height:150px;overflow:auto;margin-bottom:5px;font-size:14px}
 
-/* ===== COINS & ADMIN BUTTON ===== */
-#coinBox{
-  position:fixed;
-  top:10px;
-  left:10px;
-  background:#111;
-  padding:8px 12px;
-  border-radius:6px;
-  font-size:16px;
-  display:none;
-  z-index:9999;
-}
-#addCoinsBtn{
-  position:fixed;
-  top:10px;
-  left:120px;
-  padding:8px 12px;
-  border:none;
-  border-radius:6px;
-  background:#8e44ad;
-  color:white;
-  font-weight:bold;
-  cursor:pointer;
-  box-shadow: 0 0 10px #9b59b6, 0 0 20px #8e44ad, 0 0 30px #9b59b6;
-  animation: glow 1.5s infinite alternate;
-  display:none;
-  z-index:9999;
-}
-#addCoinsBtn:hover {
-  box-shadow: 0 0 20px #9b59b6, 0 0 40px #8e44ad, 0 0 60px #9b59b6;
-  transform: scale(1.1);
-  transition: all 0.2s;
-}
+/* Coins & admin button */
+#coinBox{position:fixed;top:10px;left:10px;background:#111;padding:8px 12px;border-radius:6px;font-size:16px;z-index:9999;}
+#addCoinsBtn{position:fixed;top:10px;left:120px;padding:8px 12px;border:none;border-radius:6px;background:#8e44ad;color:white;font-weight:bold;cursor:pointer;box-shadow:0 0 10px #9b59b6,0 0 20px #8e44ad,0 0 30px #9b59b6;animation:glow 1.5s infinite alternate;z-index:9999;}
+@keyframes glow{from{box-shadow:0 0 10px #9b59b6,0 0 20px #8e44ad,0 0 30px #9b59b6;}to{box-shadow:0 0 20px #9b59b6,0 0 30px #8e44ad,0 0 40px #9b59b6;}}
 
-/* glowing Ban/Unban buttons */
-.banBtn {
-  background:#8e44ad;
-  color:white;
-  border:none;
-  border-radius:6px;
-  cursor:pointer;
-  font-weight:bold;
-  padding:4px 8px;
-  margin-left:5px;
-  box-shadow: 0 0 8px #9b59b6, 0 0 16px #8e44ad;
-  animation: glow 1.5s infinite alternate;
-}
-.banBtn:hover {
-  box-shadow: 0 0 16px #9b59b6, 0 0 32px #8e44ad;
-  transform: scale(1.05);
-  transition: all 0.2s;
-}
+/* Shop button */
+#shopBtn{position:fixed;top:50px;left:10px;padding:8px 12px;border:none;border-radius:6px;background:#2980b9;color:white;font-weight:bold;cursor:pointer;box-shadow:0 0 5px #3498db,0 0 10px #2980b9;z-index:9999;}
 
-@keyframes glow {
-  from { box-shadow: 0 0 10px #9b59b6, 0 0 20px #8e44ad, 0 0 30px #9b59b6; }
-  to   { box-shadow: 0 0 20px #9b59b6, 0 0 30px #8e44ad, 0 0 40px #9b59b6; }
-}
+/* Pack Opener */
+#packOpener{position:fixed;top:100px;left:50%;transform:translateX(-50%);width:320px;background:#111;padding:12px;border-radius:8px;display:none;z-index:9999;text-align:center;}
+#stage{position:relative;width:300px;height:460px;margin:10px auto;}
+.pack,.card{position:absolute;width:100%;height:100%;border-radius:10px;background-size:contain;background-repeat:no-repeat;background-position:center;}
+.pack{z-index:3;cursor:pointer;}
+.card{z-index:1;opacity:0;}
+#slash{position:absolute;top:30%;left:-200%;width:220%;height:6px;background:linear-gradient(90deg,transparent,white,transparent);z-index:5;opacity:0;}
+.fire{position:absolute;width:12px;height:12px;border-radius:50%;animation:fire 1.2s forwards;}
+@keyframes fire{0%{transform:scale(1);opacity:1;}100%{transform:scale(0) translateY(-120px);opacity:0;}}
+#resetBtn{display:none;margin:10px auto;padding:10px 18px;font-size:16px;cursor:pointer;background:#000;color:white;border:1px solid #555;}
+#cardInventory{margin-top:10px;text-align:left;max-height:200px;overflow:auto;font-size:14px;border-top:1px solid #555;padding-top:5px;}
 </style>
 </head>
 <body>
 
-<div id="authBox">
-  <h2>Login</h2>
-  <input id="username" placeholder="Username">
-  <input id="password" type="password" placeholder="Password">
-  <button onclick="login()">Login</button>
-  <button onclick="signup()">Sign Up</button>
-</div>
-
+<!-- SSP Coins -->
 <div id="coinBox">Coins: <span id="coinCount">0</span></div>
 <button id="addCoinsBtn">+100 Coins</button>
+<button id="shopBtn">🛒 Shop</button>
 
-<iframe id="mainFrame" allowfullscreen sandbox="allow-scripts allow-forms allow-same-origin allow-popups allow-modals allow-presentation"></iframe>
-
-<button id="adminBtn" onclick="toggleAdmin()">⚙</button>
-
-<div id="adminPanel">
-  <h3>Users</h3>
-  <div id="onlineCount"></div>
-  <div id="usersList"></div>
-</div>
-
-<div id="chatBox">
-  <div id="chatMessages"></div>
-  <input id="chatInput" placeholder="Type message...">
+<!-- MTG Pack Opener -->
+<div id="packOpener">
+    <h2>MTG Pack Opener</h2>
+    <div id="stage">
+        <div class="card" id="card"></div>
+        <div class="pack" id="pack"></div>
+        <div id="slash"></div>
+    </div>
+    <button id="resetBtn">OPEN ANOTHER PACK</button>
+    <div id="cardInventory"><strong>Your Cards:</strong><br></div>
 </div>
 
 <script>
-let currentUser=null;
-let socket=null;
-let onlineList=[];
-let coinInterval=null;
-let lastMessageTime = 0;
-let lastMessageText = "";
+// ================= SSP COINS =================
+let currentUserCoinsKey=null;
+let coins=0;
+const coinCount=document.getElementById("coinCount");
+const addCoinsBtn=document.getElementById("addCoinsBtn");
 
-/* ===== SIGNUP ===== */
-function signup(){
-  fetch("/signup",{method:"POST",headers:{"Content-Type":"application/json"},
-  body:JSON.stringify({username:username.value,password:password.value,email:"x"})})
-  .then(r=>r.json()).then(d=>alert(d.success?"Created":"Error"));
+// This function must be called after login to set current user coins
+function initCoins(username){
+    currentUserCoinsKey="coins_"+username;
+    coins=parseInt(localStorage.getItem(currentUserCoinsKey))||0;
+    coinCount.innerText=coins;
 }
 
-/* ===== LOGIN ===== */
-function login(){
-  fetch("/login",{method:"POST",headers:{"Content-Type":"application/json"},
-  body:JSON.stringify({username:username.value,password:password.value})})
-  .then(r=>r.json()).then(d=>{
-    if(!d.success){
-      if(d.banned){ alert("You have been banned"); return; }
-      return alert("Login failed");
-    }
-
-    currentUser=d;
-    authBox.style.display="none";
-    mainFrame.style.display="block";
-    chatBox.style.display="block";
-    coinBox.style.display="block";
-
-    if(d.role && d.role.toLowerCase()==="admin"){
-      adminBtn.style.display="block";
-      addCoinsBtn.style.display="block";
-    }
-
-    startCoins();
-    connectSocket();
-    loadFullscreenIframe(); // 🔥 new fullscreen iframe
-  });
+// Update coins display and save
+function updateCoins(){
+    coinCount.innerText=coins;
+    if(currentUserCoinsKey) localStorage.setItem(currentUserCoinsKey,coins);
 }
 
-/* ===== COIN SYSTEM ===== */
-function startCoins(){
-  const coinKey="coins_"+currentUser.username;
-  let coins=parseInt(localStorage.getItem(coinKey))||0;
-  function update(){ coinCount.innerText=coins; localStorage.setItem(coinKey,coins); }
-  update();
-  coinInterval=setInterval(()=>{ coins+=25; update(); },60000);
-  addCoinsBtn.onclick=()=>{ coins+=100; update(); };
+// Admin +100 button
+addCoinsBtn.onclick=()=>{coins+=100;updateCoins();}
+
+// ================= SHOP =================
+const shopBtn=document.getElementById("shopBtn");
+const packOpener=document.getElementById("packOpener");
+shopBtn.onclick=()=>{packOpener.style.display=packOpener.style.display==="none"?"block":"none"; loadInventory();}
+
+// ================= PACK OPENER =================
+const pack=document.getElementById("pack");
+const card=document.getElementById("card");
+const slash=document.getElementById("slash");
+const resetBtn=document.getElementById("resetBtn");
+const stage=document.getElementById("stage");
+const cardInventory=document.getElementById("cardInventory");
+
+const packImage="https://sspv2play.neocities.org/mtg/pack.png";
+const cards=[
+    "https://sspv2play.neocities.org/mtg/vma-4-black-lotus.jpg",
+    "https://sspv2play.neocities.org/mtg/fdn-1-sire-of-seven-deaths.jpg",
+    "https://sspv2play.neocities.org/mtg/cn2-214-platinum-angel.jpg",
+    "https://sspv2play.neocities.org/mtg/ltr-246-the-one-ring.jpg",
+    "https://sspv2play.neocities.org/mtg/som-176-mindslaver.jpg",
+    "https://sspv2play.neocities.org/mtg/baby-doddin-the-consuming-monstrosity.jpg",
+    "https://sspv2play.neocities.org/mtg/orange-master-of-the-elements.jpg",
+    "https://sspv2play.neocities.org/mtg/vma-2-time-walk.jpg",
+    "https://sspv2play.neocities.org/mtg/c19-51-volrath-the-shapestealer.jpg"
+];
+
+let opened=false;
+
+// ================= CARD INVENTORY =================
+let inventory={};
+function loadInventory(){
+    inventory=JSON.parse(localStorage.getItem("inventory_"+currentUserCoinsKey)||"{}");
+    let html="<strong>Your Cards:</strong><br>";
+    for(let c in inventory) html+=`${inventory[c]}x <img src="${c}" width="40"><br>`;
+    cardInventory.innerHTML=html;
+}
+function saveInventory(){localStorage.setItem("inventory_"+currentUserCoinsKey,JSON.stringify(inventory));}
+
+// ================= BORDER MASK =================
+function loadAndBorderMask(src,callback){
+    const img=new Image();
+    img.crossOrigin="anonymous";
+    img.onload=()=>{
+        const canvas=document.createElement("canvas");
+        canvas.width=img.width; canvas.height=img.height;
+        const ctx=canvas.getContext("2d");
+        ctx.drawImage(img,0,0);
+        const imageData=ctx.getImageData(0,0,canvas.width,canvas.height);
+        const d=imageData.data;
+        const w=canvas.width,h=canvas.height,border=8;
+        for(let i=0;i<d.length;i+=4){
+            const x=(i/4)%w, y=Math.floor((i/4)/w);
+            const r=d[i],g=d[i+1],b=d[i+2];
+            if(r>235&&g>235&&b>235&&(x<border||x>w-border||y<border||y>h-border)){
+                d[i]=d[i+1]=d[i+2]=17;
+            }
+        }
+        ctx.putImageData(imageData,0,0);
+        callback(canvas.toDataURL());
+    };
+    img.src=src;
 }
 
-/* ===== CHAT SOCKET ===== */
-function connectSocket(){
-  const protocol = location.protocol === "https:" ? "wss:" : "ws:";
-  socket=new WebSocket(`${protocol}//${location.host}`);
-  socket.onopen=()=>{ socket.send(JSON.stringify({type:"join",username:currentUser.username})); };
-  socket.onmessage=e=>{
-    const data=JSON.parse(e.data);
-    if(data.type==="chatHistory"){ chatMessages.innerHTML=""; data.history.forEach(m=>addMessage(m.username,m.message)); }
-    if(data.type==="chat"){ addMessage(data.username,data.message); }
-    if(data.type==="onlineUpdate"){ onlineList=data.online; updateOnlineUI(); }
-    if(data.type==="banned"){ alert("You were banned"); location.reload(); }
-  };
-  chatInput.addEventListener("keypress",e=>{
-    if(e.key==="Enter" && chatInput.value.trim()!==""){
-      const now=Date.now();
-      if(now-lastMessageTime<15000){ alert(`Wait ${Math.ceil((15000-(now-lastMessageTime))/1000)}s before sending another message.`); return; }
-      if(chatInput.value.trim()===lastMessageText && now-lastMessageTime<30000){ alert("Wait 30s before sending same message."); return; }
-      socket.send(JSON.stringify({type:"chat",username:currentUser.username,role:currentUser.role,message:chatInput.value}));
-      lastMessageTime=now;
-      lastMessageText=chatInput.value.trim();
-      chatInput.value="";
-    }
-  });
-}
+// Load initial pack
+loadAndBorderMask(packImage,img=>{pack.style.backgroundImage=`url(${img})`;});
 
-/* ===== CHAT DISPLAY ===== */
-function addMessage(user,msg){ chatMessages.innerHTML+=`<div>&lt;${user}&gt; ${msg}</div>`; chatMessages.scrollTop=chatMessages.scrollHeight; }
+// ================= OPEN PACK =================
+pack.onclick=()=>{
+    if(opened) return;
+    if(coins<100){alert("Not enough coins!"); return;}
+    coins-=100; updateCoins();
+    opened=true;
+    const pull=cards[Math.floor(Math.random()*cards.length)];
+    loadAndBorderMask(pull,img=>{card.style.backgroundImage=`url(${img})`;});
+    slash.style.transition="none"; slash.style.opacity=1; slash.style.left="-200%";
+    setTimeout(()=>{slash.style.transition="left 0.25s ease-out"; slash.style.left="200%";},40);
+    setTimeout(()=>slash.style.opacity=0,350);
+    setTimeout(spawnFire,250);
+    setTimeout(()=>{pack.style.animation="burnAway 1s forwards";},450);
+    setTimeout(()=>{
+        card.style.opacity=1;
+        resetBtn.style.display="block";
+        // add to inventory
+        inventory[pull]=inventory[pull]?inventory[pull]+1:1;
+        saveInventory();
+        loadInventory();
+    },1400);
+};
 
-/* ===== ADMIN PANEL ===== */
-function toggleAdmin(){ adminPanel.style.display=adminPanel.style.display==="none"?"block":"none"; loadUsers(); }
-function updateOnlineUI(){ onlineCount.innerText="Online: "+onlineList.length; loadUsers(); }
-function loadUsers(){
-  fetch("/users").then(r=>r.json()).then(d=>{
-    usersList.innerHTML="";
-    d.users.forEach(u=>{
-      const div=document.createElement("div");
-      const onlineMark = onlineList.includes(u.username) ? "🟢" : "⚫";
-      div.innerHTML=`${onlineMark} ${u.username} (${u.role})`;
-      if(currentUser.role && currentUser.role.toLowerCase()==="admin" && u.role.toLowerCase()!=="admin"){
-        const btn=document.createElement("button");
-        btn.className="banBtn";
-        btn.innerText=u.banned?"Unban":"Ban";
-        btn.onclick = () => {
-          fetch("/"+(u.banned?"unban":"ban"),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:u.username})})
-          .then(()=>{ u.banned=!u.banned; btn.innerText=u.banned?"Unban":"Ban"; });
-        };
-        div.appendChild(btn);
-      }
-      usersList.appendChild(div);
-    });
-  });
-}
+// ================= RESET =================
+resetBtn.onclick=()=>{
+    opened=false; resetBtn.style.display="none";
+    pack.style.animation=""; pack.style.opacity=1; pack.style.transform="none";
+    card.style.opacity=0; card.style.backgroundImage="";
+};
 
-/* ===== FULLSCREEN IFRAME ===== */
-function loadFullscreenIframe(){
-  const iframe = document.getElementById("mainFrame");
-  const blankDoc = iframe.contentWindow.document;
-  blankDoc.open();
-  blankDoc.write(`
-    <!DOCTYPE html>
-    <html lang="en">
-    <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Embedded SSP</title></head>
-    <body style="margin:0; height:100vh; overflow:hidden;">
-      <iframe src="https://sspv2play.neocities.org/home" style="border:none; width:100%; height:100%;" allowfullscreen sandbox="allow-scripts allow-forms allow-same-origin allow-popups allow-modals allow-presentation"></iframe>
-    </body>
-    </html>
-  `);
-  blankDoc.close();
-}
+// ================= FIRE =================
+function spawnFire(){for(let i=0;i<80;i++){const f=document.createElement("div");f.className="fire";f.style.left=Math.random()*300+"px";f.style.top=Math.random()*460+"px";f.style.background=`hsl(${Math.random()*45},100%,50%)`;stage.appendChild(f);setTimeout(()=>f.remove(),1200);}}
+
+// ================= INIT AFTER LOGIN =================
+// Example: call initCoins('username_here') after login
 </script>
-
 </body>
 </html>
