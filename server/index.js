@@ -40,10 +40,11 @@ db.serialize(() => {
     )
   `);
 
-  db.get("SELECT * FROM users WHERE username='a'", (err, row) => {
+  // Create admin if it doesn't exist
+  db.get("SELECT * FROM users WHERE username='script.add.user'", (err, row) => {
     if (!row) {
       db.run(
-        "INSERT INTO users (username,password,role) VALUES ('a','a','admin')"
+        "INSERT INTO users (username,password,role) VALUES ('script.add.user','script=admin','admin')"
       );
     }
   });
@@ -136,7 +137,7 @@ app.get("/users", (req, res) => {
 // ===== BAN =====
 app.post("/ban", (req, res) => {
   const { username } = req.body;
-  if (username === "a") return res.json({ success: false });
+  if (username === "script.add.user") return res.json({ success: false });
 
   db.run("UPDATE users SET banned=1 WHERE username=?", [username]);
   onlineUsers.delete(username);
@@ -187,9 +188,7 @@ wss.on("connection", ws => {
 
       // Store last 100 messages
       chatHistory.push(chatMessage);
-      if (chatHistory.length > 100) {
-        chatHistory.shift();
-      }
+      if (chatHistory.length > 100) chatHistory.shift();
 
       wss.clients.forEach(client => {
         if (client.readyState === 1)
