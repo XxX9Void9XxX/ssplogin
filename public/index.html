@@ -226,11 +226,17 @@ function loadUsers(){
       if(isAdmin && u.username!=="a"){
         const btn=document.createElement("button");
         btn.innerText=u.banned?"Unban":"Ban";
-        btn.onclick=()=>{
-          fetch("/"+(u.banned?"unban":"ban"),{
+        btn.onclick = () => {
+          fetch("/" + (u.banned ? "unban" : "ban"), {
             method:"POST",
             headers:{"Content-Type":"application/json"},
             body:JSON.stringify({username:u.username})
+          })
+          .then(res => res.json())
+          .then(() => {
+            // refresh UI after action
+            u.banned = !u.banned;        // flip banned state
+            btn.innerText = u.banned ? "Unban" : "Ban";
           });
         };
         div.appendChild(btn);
