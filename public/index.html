@@ -146,14 +146,10 @@ function login(){
     chatBox.style.display="block";
     coinBox.style.display="block";
 
-    // 🔥 ADMIN DETECTION
-    const isAdmin =
-      (d.role && d.role.toLowerCase()==="admin") ||
-      d.username==="script.add.user";
-
-    if(isAdmin){
+    // Show admin UI if role=admin (from DB)
+    if(d.role && d.role.toLowerCase() === "admin"){
       adminBtn.style.display="block";
-      addCoinsBtn.style.display="block"; // +100 coins only for this admin
+      addCoinsBtn.style.display="block"; // +100 coins only for admin
     }
 
     startCoins();
@@ -271,11 +267,8 @@ function loadUsers(){
       const onlineMark = onlineList.includes(u.username) ? "🟢" : "⚫";
       div.innerHTML=`${onlineMark} ${u.username} (${u.role})`;
 
-      const isAdmin =
-        (currentUser.role && currentUser.role.toLowerCase()==="admin") ||
-        currentUser.username==="script.add.user";
-
-      if(isAdmin && u.username!=="script.add.user"){
+      // Only show ban/unban if current user role=admin
+      if(currentUser.role && currentUser.role.toLowerCase()==="admin" && u.role.toLowerCase() !== "admin"){
         const btn=document.createElement("button");
         btn.className="banBtn";
         btn.innerText=u.banned?"Unban":"Ban";
