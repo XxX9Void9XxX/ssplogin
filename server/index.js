@@ -1,13 +1,18 @@
-const express = require("express");
-const http = require("http");
-const WebSocket = require("ws");
+import express from "express";
+import http from "http";
+import { WebSocketServer } from "ws";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
 
 const app = express();
 const server = http.createServer(app);
-const wss = new WebSocket.Server({ server });
+const wss = new WebSocketServer({ server });
 
 app.use(express.json());
-app.use(express.static("public"));
+app.use(express.static(path.join(__dirname, "../public")));
 
 let users = [];
 let bannedUsers = [];
@@ -17,7 +22,7 @@ let onlineUsers = new Set();
 const ADMIN_USER = "script.add.user";
 const ADMIN_PASS = "script=admin";
 
-/* Login */
+/* LOGIN */
 app.post("/login", (req, res) => {
     const { username, password } = req.body;
 
@@ -25,8 +30,10 @@ app.post("/login", (req, res) => {
         return res.json({ success: false, message: "You are banned." });
     }
 
+    // Permanent Admin
     if (username === ADMIN_USER && password === ADMIN_PASS) {
         let admin = users.find(u => u.username === ADMIN_USER);
+
         if (!admin) {
             admin = {
                 username: ADMIN_USER,
@@ -37,11 +44,13 @@ app.post("/login", (req, res) => {
             };
             users.push(admin);
         }
+
         return res.json({ success: true, user: admin });
     }
 
     let user = users.find(u => u.username === username);
 
+    // Create new user if not exists
     if (!user) {
         user = {
             username,
@@ -60,7 +69,7 @@ app.post("/login", (req, res) => {
     res.json({ success: true, user });
 });
 
-/* Add Coins (Admin Only) */
+/* ADD COINS (Admin Only) */
 app.post("/add-coins", (req, res) => {
     const { admin, target } = req.body;
 
@@ -73,14 +82,15 @@ app.post("/add-coins", (req, res) => {
     if (!targetUser) return res.json({ success: false });
 
     targetUser.coins += 100;
+
     res.json({ success: true, coins: targetUser.coins });
 });
 
-/* Buy Pack */
+/* BUY PACK */
 app.post("/buy-pack", (req, res) => {
     const { username } = req.body;
-    const user = users.find(u => u.username === username);
 
+    const user = users.find(u => u.username === username);
     if (!user || user.coins < 100) {
         return res.json({ success: false });
     }
@@ -108,28 +118,37 @@ app.post("/buy-pack", (req, res) => {
     });
 });
 
-/* Ban */
+/* BAN USER */
 app.post("/ban", (req, res) => {
     const { admin, target } = req.body;
-    const adminUser = users.find(u => u.username === admin);
-    if (!adminUser || !adminUser.isAdmin) return res.json({ success: false });
 
-    bannedUsers.push(target);
+    const adminUser = users.find(u => u.username === admin);
+    if (!adminUser || !adminUser.isAdmin) {
+        return res.json({ success: false });
+    }
+
+    if (!bannedUsers.includes(target)) {
+        bannedUsers.push(target);
+    }
+
     res.json({ success: true });
 });
 
-/* WebSocket */
+/* WEBSOCKET */
 wss.on("connection", ws => {
-    ws.on("message", msg => {
-        const data = JSON.parse(msg);
 
+    ws.on("message", (message) => {
+        const data = JSON.parse(message);
+
+        // Join
         if (data.type === "join") {
             onlineUsers.add(data.username);
         }
 
+        // Chat broadcast
         if (data.type === "chat") {
             wss.clients.forEach(client => {
-                if (client.readyState === WebSocket.OPEN) {
+                if (client.readyState === 1) {
                     client.send(JSON.stringify({
                         type: "chat",
                         username: data.username,
@@ -139,6 +158,7 @@ wss.on("connection", ws => {
             });
         }
 
+        // Online list
         if (data.type === "getOnline") {
             ws.send(JSON.stringify({
                 type: "online",
@@ -147,7 +167,14 @@ wss.on("connection", ws => {
         }
     });
 
-    ws.on("close", () => {});
+    ws.on("close", () => {
+        // Optional: could remove from onlineUsers if tracking per connection
+    });
 });
 
-server.listen(3000, () => console.log("Server running"));
+/* START SERVER */
+const PORT = process.env.PORT || 3000;
+
+server.listen(PORT, () => {
+    console.log("Server running on port " + PORT);
+});
