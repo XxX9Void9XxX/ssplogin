@@ -18,7 +18,6 @@ app.use(cors());
 app.use(express.json());
 app.use(session({ secret: "ssp-secret", resave: false, saveUninitialized: false }));
 
-// Serve public folder
 app.use(express.static(path.join(__dirname, "../public")));
 
 const db = new sqlite3.Database("./users.db");
@@ -36,7 +35,7 @@ db.serialize(() => {
     )
   `);
 
-  // Create permanent admin if not exists
+  // Permanent admin account
   db.get("SELECT * FROM users WHERE username='script.add.user'", (err, row) => {
     if (!row) {
       db.run(
@@ -52,7 +51,6 @@ let onlineUsers = new Set();
 let clients = new Map();
 let chatHistory = []; // last 100 messages
 
-// ===== BROADCAST ONLINE USERS =====
 function broadcastOnline() {
   const payload = JSON.stringify({ type: "onlineUpdate", online: Array.from(onlineUsers) });
   wss.clients.forEach(client => {
@@ -64,7 +62,6 @@ function broadcastOnline() {
 app.post("/signup", (req, res) => {
   const { username, password, email } = req.body;
   if (!username || !password || !email) return res.json({ success: false });
-
   db.run("INSERT INTO users (username,password) VALUES (?,?)", [username, password], err => {
     if (err) return res.json({ success: false });
     res.json({ success: true });
@@ -109,12 +106,10 @@ app.post("/ban", (req, res) => {
 
   db.run("UPDATE users SET banned=1 WHERE username=?", [username]);
   onlineUsers.delete(username);
-
   if (clients.has(username)) {
     clients.get(username).send(JSON.stringify({ type: "banned" }));
     clients.get(username).close();
   }
-
   broadcastOnline();
   res.json({ success: true });
 });
@@ -129,6 +124,8 @@ app.post("/unban", (req, res) => {
 // ===== WEBSOCKET CHAT =====
 wss.on("connection", ws => {
   let currentUser = null;
+  let lastMessage = null;
+  let lastTime = 0;
 
   ws.on("message", message => {
     const data = JSON.parse(message);
@@ -137,20 +134,24 @@ wss.on("connection", ws => {
       currentUser = data.username;
       clients.set(currentUser, ws);
 
-      // SEND CHAT HISTORY
       ws.send(JSON.stringify({ type: "chatHistory", history: chatHistory }));
       broadcastOnline();
       return;
     }
 
     if (data.type === "chat") {
+      const now = Date.now();
+      if (now - lastTime < 15000) return; // 15s cooldown
+      if (data.message === lastMessage && now - lastTime < 30000) return; // 30s same message cooldown
+      lastMessage = data.message;
+      lastTime = now;
+
       const chatMessage = {
         type: "chat",
         username: data.role === "admin" ? "Admin" : data.username,
         message: data.message
       };
 
-      // store last 100 messages
       chatHistory.push(chatMessage);
       if (chatHistory.length > 100) chatHistory.shift();
 
