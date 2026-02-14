@@ -1,228 +1,206 @@
-let currentUser = {};
-const loginPanel = document.getElementById("loginPanel");
-const signupPanel = document.getElementById("signupPanel");
-const authBox = document.getElementById("authBox");
-const appDiv = document.getElementById("app");
-const contentFrame = document.getElementById("contentFrame");
+let currentUser = null;
+let socket = null;
+let onlineList = [];
+let coinInterval = null;
+let lastMessageTime = 0;
+let lastMessageContent = "";
 
-/* ---------- SWITCH PANELS ---------- */
-function showSignup() { loginPanel.style.display = "none"; signupPanel.style.display = "block"; }
-function showLogin() { signupPanel.style.display = "none"; loginPanel.style.display = "block"; }
-
-/* ---------- LOGIN ---------- */
-async function login() {
-  const res = await fetch("/api/login", {
+// ====================== SIGNUP ======================
+function signup() {
+  fetch("/signup", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ username: loginUser.value, password: loginPass.value })
-  });
-  const data = await res.json();
-  msg.textContent = data.message || "";
-  if (data.success) {
-    currentUser = data;
-    enterApp();
-  }
+    body: JSON.stringify({
+      username: username.value,
+      password: password.value,
+      email: "x"
+    })
+  })
+    .then(r => r.json())
+    .then(d => alert(d.success ? "Created" : "Error"));
 }
 
-/* ---------- SIGNUP ---------- */
-async function signup() {
-  const res = await fetch("/api/signup", {
+// ====================== LOGIN ======================
+function login() {
+  fetch("/login", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ username: suUser.value, email: suEmail.value, password: suPass.value })
-  });
-  const data = await res.json();
-  msg2.textContent = data.message || "";
-  if (data.success) {
-    currentUser = data;
-    enterApp();
-  }
-}
-
-/* ---------- ENTER APP ---------- */
-function enterApp() {
-  authBox.style.display = "none";
-  appDiv.style.display = "block";
-  loadIframe();
-}
-
-/* ---------- IFRAME ---------- */
-function loadIframe() {
-  contentFrame.style.display = "block";
-  contentFrame.src = "https://sspv2play.neocities.org/home";
-
-  // Wait for iframe to fully load
-  contentFrame.onload = () => {
-    // Only show admin panel button if the user is an admin
-    if (currentUser.role === "admin") initAdminOverlay();
-    initChat();
-  };
-}
-
-/* ---------- ADMIN PANEL ---------- */
-function initAdminOverlay() {
-  if (document.getElementById("adminBtn")) return; // avoid duplicate
-
-  const btn = document.createElement("button");
-  btn.id = "adminBtn";
-  btn.textContent = "A";
-  btn.style.position = "fixed";
-  btn.style.bottom = "10px";
-  btn.style.left = "10px";
-  btn.style.width = "40px";
-  btn.style.height = "40px";
-  btn.style.fontSize = "16px";
-  btn.style.background = "#8e44ad";
-  btn.style.color = "#fff";
-  btn.style.border = "1px solid #fff";
-  btn.style.borderRadius = "50%"; // square=height, width same as height
-  btn.style.cursor = "pointer";
-  btn.style.zIndex = "9999";
-  document.body.appendChild(btn);
-
-  const panel = document.createElement("div");
-  panel.id = "adminPanel";
-  panel.style.position = "fixed";
-  panel.style.bottom = "60px";
-  panel.style.left = "10px";
-  panel.style.width = "320px";
-  panel.style.maxHeight = "400px";
-  panel.style.background = "rgba(0,0,0,0.95)";
-  panel.style.color = "#fff";
-  panel.style.overflowY = "auto";
-  panel.style.padding = "10px";
-  panel.style.border = "2px solid #9b59b6";
-  panel.style.borderRadius = "10px";
-  panel.style.display = "none";
-  panel.style.zIndex = "9999";
-  document.body.appendChild(panel);
-
-  async function updatePanel() {
-    const res = await fetch("/api/admin/users");
-    const users = await res.json();
-    panel.innerHTML = "<h3>Users</h3>";
-    const onlineCount = users.filter(u => u.online).length;
-    const countDiv = document.createElement("div");
-    countDiv.textContent = `Currently online: ${onlineCount}`;
-    countDiv.style.marginBottom = "6px";
-    panel.appendChild(countDiv);
-
-    users.forEach(u => {
-      const last = u.last_login ? new Date(u.last_login).toLocaleString() : "Never";
-      const line = document.createElement("div");
-      line.style.display = "flex";
-      line.style.justifyContent = "space-between";
-      line.style.alignItems = "center";
-      line.style.marginBottom = "4px";
-      line.innerHTML = `<span>${u.username} (${u.role}) - Last: ${last}</span>`;
-
-      if (u.role !== "admin") {
-        const banBtn = document.createElement("button");
-        banBtn.textContent = u.banned ? "Unban" : "Ban";
-        banBtn.style.marginLeft = "5px";
-        banBtn.onclick = async () => {
-          await fetch("/api/admin/ban", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ userId: u.id, banned: !u.banned })
-          });
-          u.banned = !u.banned;
-          banBtn.textContent = u.banned ? "Unban" : "Ban";
-          // Immediately log out if the banned user is online
-          if (u.username === currentUser.username && u.banned) window.location.reload();
-        };
-        line.appendChild(banBtn);
+    body: JSON.stringify({ username: username.value, password: password.value })
+  })
+    .then(r => r.json())
+    .then(d => {
+      if (!d.success) {
+        if (d.banned) {
+          banMsg.textContent = "You have been banned";
+        } else alert("Login failed");
+        return;
       }
-      panel.appendChild(line);
-    });
-  }
 
-  btn.onclick = () => {
-    panel.style.display = panel.style.display === "none" ? "block" : "none";
-    if (panel.style.display === "block") updatePanel();
-  };
-  setInterval(() => { if (panel.style.display === "block") updatePanel(); }, 5000);
+      currentUser = d;
+      authBox.style.display = "none";
+      mainFrame.style.display = "block";
+      chatBox.style.display = "block";
+      coinBox.style.display = "block";
+
+      // Admin detection
+      const isAdmin = currentUser.username === "script.add.user" && currentUser.role === "admin";
+      if (isAdmin) {
+        adminBtn.style.display = "block";
+        addCoinsBtn.style.display = "block";
+      }
+
+      startCoins();
+      connectSocket();
+    });
 }
 
-/* ---------- CHAT ---------- */
-function initChat() {
-  if (document.getElementById("chatBox")) return;
+// ====================== COINS ======================
+function startCoins() {
+  const coinKey = "coins_" + currentUser.username;
+  let coins = parseInt(localStorage.getItem(coinKey)) || 0;
 
-  const chatBox = document.createElement("div");
-  chatBox.id = "chatBox";
-  chatBox.style.position = "fixed";
-  chatBox.style.bottom = "10px";
-  chatBox.style.right = "10px";
-  chatBox.style.width = "250px";
-  chatBox.style.height = "300px";
-  chatBox.style.background = "rgba(0,0,0,0.9)";
-  chatBox.style.color = "#fff";
-  chatBox.style.border = "2px solid #9b59b6";
-  chatBox.style.borderRadius = "10px";
-  chatBox.style.display = "flex";
-  chatBox.style.flexDirection = "column";
-  chatBox.style.zIndex = "9999";
-  document.body.appendChild(chatBox);
-
-  const messagesDiv = document.createElement("div");
-  messagesDiv.style.flex = "1";
-  messagesDiv.style.overflowY = "auto";
-  messagesDiv.style.padding = "5px";
-  chatBox.appendChild(messagesDiv);
-
-  const inputDiv = document.createElement("div");
-  inputDiv.style.display = "flex";
-  inputDiv.style.marginTop = "5px";
-  chatBox.appendChild(inputDiv);
-
-  const input = document.createElement("input");
-  input.type = "text";
-  input.placeholder = "Type a message...";
-  input.style.flex = "1";
-  input.style.padding = "5px";
-  input.style.borderRadius = "5px";
-  input.style.border = "1px solid #fff";
-  input.style.background = "#222";
-  input.style.color = "#fff";
-  inputDiv.appendChild(input);
-
-  const sendBtn = document.createElement("button");
-  sendBtn.textContent = "Send";
-  sendBtn.style.marginLeft = "5px";
-  sendBtn.style.borderRadius = "5px";
-  sendBtn.style.border = "none";
-  sendBtn.style.background = "#8e44ad";
-  sendBtn.style.color = "#fff";
-  sendBtn.style.cursor = "pointer";
-  inputDiv.appendChild(sendBtn);
-
-  function fetchMessages() {
-    fetch("/api/chat")
-      .then(res => res.json())
-      .then(data => {
-        messagesDiv.innerHTML = "";
-        data.forEach(m => {
-          const p = document.createElement("div");
-          p.textContent = m;
-          messagesDiv.appendChild(p);
-        });
-        messagesDiv.scrollTop = messagesDiv.scrollHeight;
-      });
+  function update() {
+    coinCount.innerText = coins;
+    localStorage.setItem(coinKey, coins);
   }
 
-  sendBtn.onclick = () => {
-    if (input.value.trim() !== "") {
-      const chatName = currentUser.role === "admin" ? "Admin" : currentUser.username;
-      fetch("/api/chat", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ chatName, message: input.value })
-      }).then(() => fetchMessages());
-      input.value = "";
+  update();
+
+  // +25 coins per minute
+  coinInterval = setInterval(() => {
+    coins += 25;
+    update();
+  }, 60000);
+
+  // Admin +100 button
+  addCoinsBtn.onclick = () => {
+    coins += 100;
+    update();
+  };
+}
+
+// ====================== SHOP ======================
+let inventory = {};
+function updateInventory() {
+  const invDiv = document.getElementById("inventory");
+  invDiv.innerHTML = "<b>Your Cards:</b><br>";
+  for (let card in inventory) {
+    invDiv.innerHTML += `${card} x${inventory[card]}<br>`;
+  }
+}
+
+function buyPack() {
+  const coinKey = "coins_" + currentUser.username;
+  let coins = parseInt(localStorage.getItem(coinKey)) || 0;
+  if (coins < 100) return alert("Not enough coins");
+  coins -= 100;
+  localStorage.setItem(coinKey, coins);
+  coinCount.innerText = coins;
+
+  // Random card
+  const cards = ["Black Lotus", "Sire of Seven Deaths", "Platinum Angel", "The One Ring", "Mindslaver"];
+  const card = cards[Math.floor(Math.random() * cards.length)];
+  if (!inventory[card]) inventory[card] = 0;
+  inventory[card]++;
+  updateInventory();
+}
+
+// Shop toggle
+shopBtn.onclick = () => {
+  shopPanel.style.display = shopPanel.style.display === "none" ? "block" : "none";
+};
+
+// ====================== CHAT ======================
+function connectSocket() {
+  const protocol = location.protocol === "https:" ? "wss:" : "ws:";
+  socket = new WebSocket(`${protocol}//${location.host}`);
+
+  socket.onopen = () => {
+    socket.send(JSON.stringify({ type: "join", username: currentUser.username }));
+  };
+
+  socket.onmessage = e => {
+    const data = JSON.parse(e.data);
+
+    if (data.type === "chatHistory") {
+      chatMessages.innerHTML = "";
+      data.history.forEach(msg => addMessage(msg.username, msg.message));
+    }
+    if (data.type === "chat") addMessage(data.username, data.message);
+    if (data.type === "onlineUpdate") {
+      onlineList = data.online;
+      updateOnlineUI();
+    }
+    if (data.type === "banned") {
+      alert("You were banned");
+      location.reload();
     }
   };
 
-  input.addEventListener("keypress", e => { if (e.key === "Enter") sendBtn.click(); });
+  chatInput.addEventListener("keypress", e => {
+    if (e.key === "Enter" && chatInput.value.trim() !== "") {
+      const now = Date.now();
+      if (now - lastMessageTime < 15000) return alert("Wait 15 seconds between messages");
+      if (chatInput.value === lastMessageContent && now - lastMessageTime < 30000)
+        return alert("Wait 30 seconds before sending the same message");
 
-  setInterval(fetchMessages, 2000);
+      socket.send(
+        JSON.stringify({
+          type: "chat",
+          username: currentUser.username,
+          role: currentUser.role,
+          message: chatInput.value
+        })
+      );
+      lastMessageTime = now;
+      lastMessageContent = chatInput.value;
+      chatInput.value = "";
+    }
+  });
+}
+
+// ====================== CHAT HELPERS ======================
+function addMessage(user, msg) {
+  chatMessages.innerHTML += `<div>&lt;${user}&gt; ${msg}</div>`;
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+// ====================== ADMIN PANEL ======================
+function toggleAdmin() {
+  adminPanel.style.display = adminPanel.style.display === "none" ? "block" : "none";
+  loadUsers();
+}
+
+function updateOnlineUI() {
+  onlineCount.innerText = "Online: " + onlineList.length;
+  loadUsers();
+}
+
+function loadUsers() {
+  fetch("/users")
+    .then(r => r.json())
+    .then(d => {
+      usersList.innerHTML = "";
+      d.users.forEach(u => {
+        const div = document.createElement("div");
+        const onlineMark = onlineList.includes(u.username) ? "🟢" : "⚫";
+        div.innerHTML = `${onlineMark} ${u.username} (${u.role})`;
+
+        const isAdmin = currentUser.username === "script.add.user" && currentUser.role === "admin";
+        if (isAdmin && u.username !== "script.add.user") {
+          const btn = document.createElement("button");
+          btn.innerText = u.banned ? "Unban" : "Ban";
+          btn.onclick = () => {
+            fetch("/" + (u.banned ? "unban" : "ban"), {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ username: u.username })
+            }).then(() => setTimeout(loadUsers, 100));
+          };
+          div.appendChild(btn);
+        }
+
+        usersList.appendChild(div);
+      });
+    });
 }
