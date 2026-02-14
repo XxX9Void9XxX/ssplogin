@@ -146,7 +146,7 @@ function login(){
     chatBox.style.display="block";
     coinBox.style.display="block";
 
-    // Show admin UI if role=admin (from DB)
+    // Show admin UI only if user role = admin from DB
     if(d.role && d.role.toLowerCase() === "admin"){
       adminBtn.style.display="block";
       addCoinsBtn.style.display="block"; // +100 coins only for admin
