@@ -1,213 +1,165 @@
-import express from "express";
-import session from "express-session";
-import cors from "cors";
-import sqlite3 from "sqlite3";
-import { WebSocketServer } from "ws";
-import http from "http";
-import path from "path";
-import { fileURLToPath } from "url";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
+const express = require("express");
+const session = require("express-session");
+const bcrypt = require("bcryptjs");
+const auth = require("./auth");
 
 const app = express();
-const server = http.createServer(app);
-const wss = new WebSocketServer({ server });
 
-app.use(cors());
+app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 
 app.use(session({
-  secret: "ssp-secret",
-  resave: false,
-  saveUninitialized: false
+    secret: "supersecretkey",
+    resave: false,
+    saveUninitialized: false
 }));
 
-app.use(express.static(path.join(__dirname, "../public")));
-
-const db = new sqlite3.Database("./users.db");
-
-// ===== DATABASE =====
-db.serialize(() => {
-  db.run(`
-    CREATE TABLE IF NOT EXISTS users (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      username TEXT UNIQUE,
-      password TEXT,
-      role TEXT DEFAULT 'user',
-      banned INTEGER DEFAULT 0,
-      lastLogin TEXT
-    )
-  `);
-
-  db.get("SELECT * FROM users WHERE username='a'", (err, row) => {
-    if (!row) {
-      db.run(
-        "INSERT INTO users (username,password,role) VALUES ('a','a','admin')"
-      );
+// Home/Login Page
+app.get("/", (req, res) => {
+    if (req.session.user) {
+        return res.redirect("/dashboard");
     }
-  });
+
+    res.send(`
+        <h1>Login</h1>
+        <form method="POST" action="/login">
+            <input name="username" placeholder="Username" required /><br><br>
+            <input type="password" name="password" placeholder="Password" required /><br><br>
+            <button type="submit">Login</button>
+        </form>
+        <br>
+        <a href="/register">Register</a>
+        ${req.session.message ? `<p style="color:red">${req.session.message}</p>` : ""}
+    `);
+
+    req.session.message = null;
 });
 
-let onlineUsers = new Set();
-let clients = new Map();
-let chatHistory = [];
-
-// ===== BROADCAST ONLINE =====
-function broadcastOnline() {
-  const payload = JSON.stringify({
-    type: "onlineUpdate",
-    online: Array.from(onlineUsers)
-  });
-
-  wss.clients.forEach(client => {
-    if (client.readyState === 1) {
-      client.send(payload);
-    }
-  });
-}
-
-// ===== SIGNUP =====
-app.post("/signup", (req, res) => {
-  const { username, password, email } = req.body;
-
-  if (!username || !password || !email)
-    return res.json({ success: false });
-
-  db.run(
-    "INSERT INTO users (username,password) VALUES (?,?)",
-    [username, password],
-    err => {
-      if (err) return res.json({ success: false });
-      res.json({ success: true });
-    }
-  );
+// Register Page
+app.get("/register", (req, res) => {
+    res.send(`
+        <h1>Register</h1>
+        <form method="POST" action="/register">
+            <input name="username" placeholder="Username" required /><br><br>
+            <input type="password" name="password" placeholder="Password" required /><br><br>
+            <button type="submit">Register</button>
+        </form>
+        <br>
+        <a href="/">Back to Login</a>
+    `);
 });
 
-// ===== LOGIN =====
-app.post("/login", (req, res) => {
-  const { username, password } = req.body;
+// Register Logic
+app.post("/register", async (req, res) => {
+    const { username, password } = req.body;
 
-  db.get(
-    "SELECT * FROM users WHERE username=?",
-    [username],
-    (err, user) => {
+    if (auth.users.find(u => u.username === username)) {
+        req.session.message = "User already exists";
+        return res.redirect("/");
+    }
 
-      if (!user)
-        return res.json({ success: false, message: "Login failed" });
+    const hashed = await bcrypt.hash(password, 10);
 
-      if (user.banned)
-        return res.json({ success: false, banned: true, message: "You Have Been Banned" });
-
-      if (user.password !== password)
-        return res.json({ success: false, message: "Login failed" });
-
-      db.run(
-        "UPDATE users SET lastLogin=? WHERE username=?",
-        [new Date().toISOString(), username]
-      );
-
-      onlineUsers.add(username);
-      broadcastOnline();
-
-      res.json({
-        success: true,
+    auth.users.push({
         username,
-        role: user.role
-      });
-    }
-  );
+        password: hashed,
+        banned: false,
+        admin: false
+    });
+
+    req.session.message = "Registered! Please login.";
+    res.redirect("/");
 });
 
-// ===== USERS LIST =====
-app.get("/users", (req, res) => {
-  db.all("SELECT username,role,banned,lastLogin FROM users", (err, rows) => {
-    res.json({ users: rows });
-  });
-});
+// Login Logic
+app.post("/login", async (req, res) => {
+    const { username, password } = req.body;
 
-// ===== BAN (ADMIN ONLY) =====
-app.post("/ban", (req, res) => {
-  const { username, admin } = req.body;
+    const user = auth.users.find(u => u.username === username);
 
-  if (admin !== "a") return res.json({ success: false });
-  if (username === "a") return res.json({ success: false });
-
-  db.run("UPDATE users SET banned=1 WHERE username=?", [username]);
-
-  onlineUsers.delete(username);
-
-  if (clients.has(username)) {
-    clients.get(username).send(JSON.stringify({ type: "banned" }));
-    clients.get(username).close();
-  }
-
-  broadcastOnline();
-  res.json({ success: true });
-});
-
-// ===== UNBAN (ADMIN ONLY) =====
-app.post("/unban", (req, res) => {
-  const { username, admin } = req.body;
-
-  if (admin !== "a") return res.json({ success: false });
-
-  db.run("UPDATE users SET banned=0 WHERE username=?", [username]);
-
-  res.json({ success: true });
-});
-
-// ===== WEBSOCKET =====
-wss.on("connection", ws => {
-  let currentUser = null;
-
-  ws.on("message", message => {
-    const data = JSON.parse(message);
-
-    if (data.type === "join") {
-      currentUser = data.username;
-      clients.set(currentUser, ws);
-
-      ws.send(JSON.stringify({
-        type: "chatHistory",
-        history: chatHistory
-      }));
-
-      broadcastOnline();
-      return;
+    if (!user) {
+        req.session.message = "Login Failed";
+        return res.redirect("/");
     }
 
-    if (data.type === "chat") {
-      const chatMessage = {
-        type: "chat",
-        username: data.role === "admin" ? "Admin" : data.username,
-        message: data.message
-      };
+    const match = await bcrypt.compare(password, user.password);
 
-      chatHistory.push(chatMessage);
-      if (chatHistory.length > 100) chatHistory.shift();
-
-      wss.clients.forEach(client => {
-        if (client.readyState === 1)
-          client.send(JSON.stringify(chatMessage));
-      });
+    if (!match) {
+        req.session.message = "Login Failed";
+        return res.redirect("/");
     }
-  });
 
-  ws.on("close", () => {
-    if (currentUser) {
-      onlineUsers.delete(currentUser);
-      clients.delete(currentUser);
-      broadcastOnline();
+    if (user.banned) {
+        req.session.message = "You Have Been Banned";
+        return res.redirect("/");
     }
-  });
+
+    req.session.user = user;
+    res.redirect("/dashboard");
 });
 
-app.get("*", (req, res) => {
-  res.sendFile(path.join(__dirname, "../public/index.html"));
+// Dashboard
+app.get("/dashboard", (req, res) => {
+    if (!req.session.user) return res.redirect("/");
+
+    res.send(`
+        <h1>Welcome ${req.session.user.username}</h1>
+        ${req.session.user.admin ? `<a href="/admin">Admin Panel</a><br><br>` : ""}
+        <a href="/logout">Logout</a>
+    `);
 });
 
-const PORT = process.env.PORT || 10000;
-server.listen(PORT, () =>
-  console.log("SSP FULL SYSTEM running on port", PORT)
-);
+// Admin Panel
+app.get("/admin", (req, res) => {
+    if (!req.session.user || !req.session.user.admin) {
+        return res.redirect("/");
+    }
+
+    const userList = auth.users.map(u => `
+        <p>
+            ${u.username} - 
+            ${u.banned ? "BANNED" : "ACTIVE"}
+            <form method="POST" action="/toggle-ban" style="display:inline;">
+                <input type="hidden" name="username" value="${u.username}">
+                <button type="submit">
+                    ${u.banned ? "Unban" : "Ban"}
+                </button>
+            </form>
+        </p>
+    `).join("");
+
+    res.send(`
+        <h1>Admin Panel</h1>
+        ${userList}
+        <br>
+        <a href="/dashboard">Back</a>
+    `);
+});
+
+// Toggle Ban
+app.post("/toggle-ban", (req, res) => {
+    if (!req.session.user || !req.session.user.admin) {
+        return res.redirect("/");
+    }
+
+    const user = auth.users.find(u => u.username === req.body.username);
+
+    if (user) {
+        user.banned = !user.banned;
+    }
+
+    res.redirect("/admin");
+});
+
+// Logout
+app.get("/logout", (req, res) => {
+    req.session.destroy(() => {
+        res.redirect("/");
+    });
+});
+
+// IMPORTANT FOR RENDER
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+    console.log("Server running on port " + PORT);
+});
