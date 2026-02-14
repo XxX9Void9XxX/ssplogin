@@ -1,213 +1,154 @@
-let currentUser = null;
-let socket = null;
-let onlineList = [];
-let coinInterval = null;
+let currentUser=null;
+let socket=null;
+let onlineList=[];
+let coinInterval=null;
+let collection = {}; // saved cards
 
-/* ======================
-   SIGNUP
-====================== */
-function signup() {
-  fetch("/signup", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      username: loginUser.value,
-      password: loginPass.value,
-      email: "x"
-    })
-  })
-    .then(r => r.json())
-    .then(d => alert(d.success ? "Created" : "Error"));
+/* ====================== SIGNUP ====================== */
+function signup(){
+  fetch("/signup",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({username:username.value,password:password.value})
+  }).then(r=>r.json()).then(d=>alert(d.success?"Created":"Error"));
 }
 
-/* ======================
-   LOGIN
-====================== */
-function login() {
-  fetch("/login", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      username: loginUser.value,
-      password: loginPass.value
-    })
-  })
-    .then(r => r.json())
-    .then(d => {
-      if (!d.success) {
-        if (d.banned) alert("You have been banned");
-        else alert("Login failed");
-        return;
-      }
+/* ====================== LOGIN ====================== */
+function login(){
+  fetch("/login",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({username:username.value,password:password.value})
+  }).then(r=>r.json()).then(d=>{
+    if(!d.success) return d.banned ? alert("You have been banned") : alert("Login failed");
 
-      currentUser = d;
+    currentUser=d;
+    authBox.style.display="none";
+    mainFrame.style.display="block";
+    chatBox.style.display="block";
+    coinBox.style.display="block";
+    storeBtn.style.display="block";
 
-      // Hide auth box, show main iframe + chat + coins
-      authBox.style.display = "none";
-      mainFrame.style.display = "block";
-      chatBox.style.display = "block";
-      coinBox.style.display = "block";
+    const isAdmin = d.role && d.role.toLowerCase()==="admin";
+    if(isAdmin) addCoinsBtn.style.display="block";
 
-      // Admin detection
-      const isAdmin =
-        (d.role && d.role.toLowerCase() === "admin") ||
-        d.username === "script.add.user";
-
-      if (isAdmin) {
-        adminBtn.style.display = "block";
-        adminCoinsBtn.style.display = "inline-block";
-      }
-
-      // Load iframe with fullscreen capability
-      loadIframe();
-
-      // Start coins
-      startCoins();
-
-      // Connect chat
-      connectSocket();
-    });
+    startCoins();
+    connectSocket();
+    loadStoreCollection();
+  });
 }
 
-/* ======================
-   IFRAME FULLSCREEN HOME
-====================== */
-function loadIframe() {
-  const iframe = document.getElementById("mainFrame");
-  iframe.src = "https://sspv2play.neocities.org/home";
-}
+/* ====================== COINS ====================== */
+function startCoins(){
+  const key="coins_"+currentUser.username;
+  let coins=parseInt(localStorage.getItem(key))||0;
 
-/* ======================
-   COIN SYSTEM
-====================== */
-function startCoins() {
-  const coinKey = "coins_" + currentUser.username;
-  let coins = parseInt(localStorage.getItem(coinKey)) || 0;
-
-  function update() {
-    coinCount.innerText = coins;
-    localStorage.setItem(coinKey, coins);
+  function update(){
+    coinCount.innerText=coins;
+    localStorage.setItem(key,coins);
   }
   update();
 
-  coinInterval = setInterval(() => {
-    coins += 25;
+  coinInterval=setInterval(()=>{
+    coins+=25;
     update();
-  }, 60000);
+  },60000);
 
-  // Admin +100 coins
-  adminCoinsBtn.onclick = () => {
-    coins += 100;
+  addCoinsBtn.onclick=()=>{
+    coins+=100;
     update();
+  };
+
+  // Store pack opener cost
+  openPackBtn.onclick=()=>{
+    if(coins<100) return alert("Not enough coins!");
+    coins-=100;
+    update();
+    openPack();
   };
 }
 
-/* ======================
-   CHAT
-====================== */
-let lastMessage = "";
-let lastSent = 0;
-function connectSocket() {
-  const protocol = location.protocol === "https:" ? "wss:" : "ws:";
-  socket = new WebSocket(`${protocol}//${location.host}`);
+/* ====================== SOCKET / CHAT ====================== */
+function connectSocket(){
+  const protocol = location.protocol==="https:"?"wss:":"ws:";
+  socket=new WebSocket(`${protocol}//${location.host}`);
 
-  socket.onopen = () => {
-    socket.send(JSON.stringify({ type: "join", username: currentUser.username }));
+  socket.onopen=()=>socket.send(JSON.stringify({type:"join",username:currentUser.username}));
+  socket.onmessage=e=>{
+    const data=JSON.parse(e.data);
+    if(data.type==="chatHistory"){
+      chatMessages.innerHTML="";
+      data.history.forEach(msg=>addMessage(msg.username,msg.message));
+    }
+    if(data.type==="chat") addMessage(data.username,data.message);
+    if(data.type==="onlineUpdate"){onlineList=data.online;updateOnlineUI();}
+    if(data.type==="banned"){alert("You were banned");location.reload();}
+    if(data.type==="chatError") alert(data.message);
   };
 
-  socket.onmessage = e => {
-    const data = JSON.parse(e.data);
-
-    if (data.type === "chatHistory") {
-      chatMessages.innerHTML = "";
-      data.history.forEach(msg => addMessage(msg.username, msg.message));
-    }
-
-    if (data.type === "chat") addMessage(data.username, data.message);
-    if (data.type === "onlineUpdate") {
-      onlineList = data.online;
-      updateOnlineUI();
-    }
-    if (data.type === "banned") {
-      alert("You were banned");
-      location.reload();
-    }
-  };
-
-  chatInput.addEventListener("keypress", e => {
-    if (e.key === "Enter" && chatInput.value.trim() !== "") {
-      const now = Date.now();
-      if (now - lastSent < 15000) {
-        alert("Wait 15 seconds before sending another message");
-        return;
-      }
-      if (chatInput.value === lastMessage && now - lastSent < 30000) {
-        alert("Wait 30 seconds before sending the same message");
-        return;
-      }
-
-      socket.send(JSON.stringify({
-        type: "chat",
-        username: currentUser.username,
-        role: currentUser.role,
-        message: chatInput.value
-      }));
-
-      lastMessage = chatInput.value;
-      lastSent = now;
-      chatInput.value = "";
+  chatInput.addEventListener("keypress",e=>{
+    if(e.key==="Enter" && chatInput.value.trim()!==""){
+      socket.send(JSON.stringify({type:"chat",username:currentUser.username,role:currentUser.role,message:chatInput.value}));
+      chatInput.value="";
     }
   });
 }
 
-function addMessage(user, msg) {
-  chatMessages.innerHTML += `<div>&lt;${user}&gt; ${msg}</div>`;
-  chatMessages.scrollTop = chatMessages.scrollHeight;
+/* ====================== CHAT/UI ====================== */
+function addMessage(user,msg){
+  chatMessages.innerHTML+=`<div>&lt;${user}&gt; ${msg}</div>`;
+  chatMessages.scrollTop=chatMessages.scrollHeight;
 }
-
-/* ======================
-   ADMIN PANEL
-====================== */
-function toggleAdmin() {
-  adminPanel.style.display =
-    adminPanel.style.display === "none" ? "block" : "none";
+function updateOnlineUI(){
+  onlineCount.innerText="Online: "+onlineList.length;
   loadUsers();
 }
+function loadUsers(){
+  fetch("/users").then(r=>r.json()).then(d=>{
+    usersList.innerHTML="";
+    d.users.forEach(u=>{
+      const div=document.createElement("div");
+      div.innerHTML=`${onlineList.includes(u.username)?"🟢":"⚫"} ${u.username} (${u.role})`;
 
-function updateOnlineUI() {
-  onlineCount.innerText = "Online: " + onlineList.length;
-  loadUsers();
-}
+      if(currentUser.role==="admin" && u.username!=="script.add.user"){
+        const btn=document.createElement("button");
+        btn.innerText=u.banned?"Unban":"Ban";
+        btn.onclick=()=>{
+          fetch("/"+(u.banned?"unban":"ban"),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:u.username})})
+            .then(()=>loadUsers());
+        };
+        div.appendChild(btn);
+      }
 
-function loadUsers() {
-  fetch("/users")
-    .then(r => r.json())
-    .then(d => {
-      usersList.innerHTML = "";
-
-      d.users.forEach(u => {
-        const div = document.createElement("div");
-        const onlineMark = onlineList.includes(u.username) ? "🟢" : "⚫";
-        div.innerHTML = `${onlineMark} ${u.username} (${u.role})`;
-
-        const isAdmin =
-          (currentUser.role && currentUser.role.toLowerCase() === "admin") ||
-          currentUser.username === "script.add.user";
-
-        if (isAdmin && u.username !== "script.add.user") {
-          const btn = document.createElement("button");
-          btn.innerText = u.banned ? "Unban" : "Ban";
-          btn.onclick = () => {
-            fetch("/" + (u.banned ? "unban" : "ban"), {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ username: u.username })
-            }).then(() => loadUsers());
-          };
-          div.appendChild(btn);
-        }
-
-        usersList.appendChild(div);
-      });
+      usersList.appendChild(div);
     });
+  });
+}
+
+/* ====================== STORE COLLECTION ====================== */
+function loadStoreCollection(){
+  collection = JSON.parse(localStorage.getItem("collection_"+currentUser.username)||"{}");
+  renderCollection();
+}
+function renderCollection(){
+  storeCollection.innerHTML="";
+  for(let card in collection){
+    storeCollection.innerHTML+=`<div>${card}: ${collection[card]}</div>`;
+  }
+}
+
+/* ====================== PACK OPENING ====================== */
+function openPack(){
+  const cards = [
+    "https://sspv2play.neocities.org/mtg/vma-4-black-lotus.jpg",
+    "https://sspv2play.neocities.org/mtg/fdn-1-sire-of-seven-deaths.jpg",
+    "https://sspv2play.neocities.org/mtg/cn2-214-platinum-angel.jpg",
+    "https://sspv2play.neocities.org/mtg/ltr-246-the-one-ring.jpg",
+    "https://sspv2play.neocities.org/mtg/som-176-mindslaver.jpg",
+    "https://sspv2play.neocities.org/mtg/baby-doddin-the-consuming-monstrosity.jpg",
+    "https://sspv2play.neocities.org/mtg/orange-master-of-the-elements.jpg",
+    "https://sspv2play.neocities.org/mtg/vma-2-time-walk.jpg",
+    "https://sspv2play.neocities.org/mtg/c19-51-volrath-the-shapestealer.jpg"
+  ];
+  const pull = cards[Math.floor(Math.random()*cards.length)];
+  collection[pull] = (collection[pull]||0)+1;
+  localStorage.setItem("collection_"+currentUser.username,JSON.stringify(collection));
+  renderCollection();
+  alert("You pulled a card!");
 }
