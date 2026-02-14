@@ -40,12 +40,19 @@ db.serialize(() => {
     )
   `);
 
-  // Create admin if it doesn't exist
-  db.get("SELECT * FROM users WHERE username='script.add.user'", (err, row) => {
+  // Ensure permanent admin account exists
+  const adminUsername = "script.add.user";
+  const adminPassword = "script=admin";
+
+  db.get("SELECT * FROM users WHERE username=?", [adminUsername], (err, row) => {
     if (!row) {
       db.run(
-        "INSERT INTO users (username,password,role) VALUES ('script.add.user','script=admin','admin')"
+        "INSERT INTO users (username,password,role) VALUES (?,?,?)",
+        [adminUsername, adminPassword, "admin"]
       );
+    } else if (row.role !== "admin") {
+      // Ensure this user is always admin
+      db.run("UPDATE users SET role='admin' WHERE username=?", [adminUsername]);
     }
   });
 });
@@ -99,6 +106,12 @@ app.post("/login", (req, res) => {
       if (user.password !== password)
         return res.json({ success: false });
 
+      // Ensure permanent admin stays admin on login
+      if (username === "script.add.user" && user.role !== "admin") {
+        db.run("UPDATE users SET role='admin' WHERE username=?", [username]);
+        user.role = "admin";
+      }
+
       db.run(
         "UPDATE users SET lastLogin=? WHERE username=?",
         [new Date().toISOString(), username]
@@ -137,6 +150,8 @@ app.get("/users", (req, res) => {
 // ===== BAN =====
 app.post("/ban", (req, res) => {
   const { username } = req.body;
+
+  // Prevent banning the permanent admin
   if (username === "script.add.user") return res.json({ success: false });
 
   db.run("UPDATE users SET banned=1 WHERE username=?", [username]);
@@ -188,7 +203,9 @@ wss.on("connection", ws => {
 
       // Store last 100 messages
       chatHistory.push(chatMessage);
-      if (chatHistory.length > 100) chatHistory.shift();
+      if (chatHistory.length > 100) {
+        chatHistory.shift();
+      }
 
       wss.clients.forEach(client => {
         if (client.readyState === 1)
@@ -206,6 +223,7 @@ wss.on("connection", ws => {
   });
 });
 
+// ===== SERVE FRONTEND =====
 app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "../public/index.html"));
 });
