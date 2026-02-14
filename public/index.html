@@ -12,8 +12,8 @@ button{padding:8px;margin:5px;cursor:pointer}
 iframe{width:100%;height:100vh;border:none;display:none}
 
 /* ===== ADMIN ===== */
-#adminBtn{position:fixed;bottom:10px;left:10px;width:40px;height:40px;background:#9b59b6;color:white;border:none;border-radius:50%;display:none;cursor:pointer}
-#adminPanel{position:fixed;left:10px;bottom:60px;background:#111;padding:10px;display:none;width:260px;border-radius:6px}
+#adminBtn{position:fixed;bottom:10px;left:10px;width:40px;height:40px;background:#9b59b6;color:white;border:none;border-radius:50%;cursor:pointer;display:none;z-index:9999}
+#adminPanel{position:fixed;left:10px;bottom:60px;background:#111;padding:10px;width:260px;border-radius:6px;color:white;display:none;z-index:9999}
 
 /* ===== CHAT ===== */
 #chatBox{position:fixed;right:10px;bottom:10px;width:300px;background:#111;padding:10px;border-radius:6px;display:none;flex-direction:column}
@@ -119,8 +119,15 @@ function login(){
     coinBox.style.display="block";
     storeBtn.style.display="block";
 
-    if(d.role==="admin") addCoinsBtn.style.display="block";
+    // ADMIN PANEL + COINS
+    if(d.role==="admin"){
+      addCoinsBtn.style.display="block";
+      adminBtn.style.display="block";
+      adminPanel.style.display="block";
+    }
+
     startCoins();
+    loadInventory();
     connectSocket();
     loadIframe();
     if(d.role==="admin") loadUsers();
@@ -136,7 +143,24 @@ function startCoins(){
   function update(){coinCount.innerText=coins;localStorage.setItem(key,coins);}
   update();
   coinInterval=setInterval(()=>{coins+=25;update();},60000);
-  addCoinsBtn.onclick=()=>{coins+=100;update();}
+  addCoinsBtn.onclick=()=>{
+    coins+=100;update();
+    saveInventory(); // Save after admin coins
+  }
+}
+
+/* ======================
+   INVENTORY PERSISTENCE
+====================== */
+function loadInventory(){
+  const key="inv_"+currentUser.username;
+  const saved=localStorage.getItem(key);
+  inventory=saved?JSON.parse(saved):{};
+}
+
+function saveInventory(){
+  const key="inv_"+currentUser.username;
+  localStorage.setItem(key,JSON.stringify(inventory));
 }
 
 /* ======================
@@ -278,7 +302,7 @@ function showPackOpener(packName){
 
   const resetBtn = document.createElement("button");
   resetBtn.id="resetBtn";
-  resetBtn.innerText="Open Another Pack";
+  resetBtn.innerText="Close Pack";
   storePanel.appendChild(resetBtn);
 
   const packImage="https://sspv2play.neocities.org/mtg/pack.png";
@@ -312,11 +336,12 @@ function showPackOpener(packName){
     setTimeout(()=>{card.style.opacity=1; resetBtn.style.display="block";},1400);
 
     inventory[packName]=inventory[packName]?inventory[packName]+1:1;
+    saveInventory();
     alert(`You opened a ${packName}! You now have ${inventory[packName]}`);
   };
 
   resetBtn.onclick=()=>{stage.remove();resetBtn.remove();}
-  function spawnFire(){for(let i=0;i<80;i++){const f=document.createElement("div");f.className="fire";f.style.left=Math.random()*300+"px";f.style.top=Math.random()*460+"px";f.style.background=`hsl(${Math.random()*45},100%,50%)`;stage.appendChild(f);setTimeout(()=>f.remove(),1200);}}
+  function spawnFire(){for(let i=0;i<80;i++){const f=document.createElement("div");f.className="fire";f.style.left=Math.random()*300+"px";f.style.top=Math.random()*460+"px";f.style.background=`hsl(${Math.random()*45},100%,50%)`;stage.appendChild(f);setTimeout(()=>f.remove(),1200);}
 }
 </script>
 </body>
