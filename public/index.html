@@ -149,11 +149,11 @@ function login(){
     // 🔥 ADMIN DETECTION
     const isAdmin =
       (d.role && d.role.toLowerCase()==="admin") ||
-      d.username==="a";  // protected admin username
+      d.username==="script.add.user";
 
     if(isAdmin){
       adminBtn.style.display="block";
-      addCoinsBtn.style.display="block";
+      addCoinsBtn.style.display="block"; // +100 coins only for this admin
     }
 
     startCoins();
@@ -273,9 +273,9 @@ function loadUsers(){
 
       const isAdmin =
         (currentUser.role && currentUser.role.toLowerCase()==="admin") ||
-        currentUser.username==="a";
+        currentUser.username==="script.add.user";
 
-      if(isAdmin && u.username!=="a"){
+      if(isAdmin && u.username!=="script.add.user"){
         const btn=document.createElement("button");
         btn.className="banBtn";
         btn.innerText=u.banned?"Unban":"Ban";
