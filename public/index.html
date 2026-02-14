@@ -1,320 +1,121 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>MTG System</title>
+<title>SSP Login</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>
-body { margin:0; font-family:Arial; background:#111; color:white; }
+body{margin:0;background:black;color:white;font-family:Arial}
+#authBox{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%)}
+input{display:block;margin:10px;padding:8px}
+button{padding:8px;margin:5px;cursor:pointer}
+iframe{width:100%;height:100vh;border:none;display:none}
+#adminBtn{position:fixed;bottom:10px;left:10px;width:40px;height:40px;background:#9b59b6;color:white;border:none;border-radius:6px;display:none;cursor:pointer}
+#adminPanel{position:fixed;left:10px;bottom:60px;background:#111;padding:10px;display:none;width:260px;border-radius:6px;max-height:400px;overflow-y:auto}
+#chatBox{position:fixed;right:10px;bottom:10px;width:300px;background:#111;padding:10px;border-radius:6px;display:none}
+#chatMessages{height:150px;overflow:auto;margin-bottom:5px;font-size:14px}
 
-/* LOGIN */
-#loginScreen {
-    position:fixed;
-    inset:0;
-    background:#000;
-    display:flex;
-    flex-direction:column;
-    align-items:center;
-    justify-content:center;
-}
-input { padding:8px; margin:5px; }
-button { padding:8px 12px; margin:5px; cursor:pointer; }
-
-/* TOP BAR */
-#topBar {
-    display:none;
-    padding:10px;
-    background:#000;
-    border-bottom:1px solid #333;
-}
-#coins { font-weight:bold; }
-#shopBtn { font-size:20px; }
-
-/* ADMIN PANEL */
-#adminPanel {
-    display:none;
-    position:fixed;
-    right:0;
-    top:0;
-    width:250px;
-    height:100%;
-    background:#1a1a1a;
-    border-left:2px solid purple;
-    padding:10px;
-    overflow:auto;
+/* ===== COINS ===== */
+#coinBox{
+  position:fixed;
+  top:10px;
+  left:10px;
+  background:#111;
+  padding:8px 12px;
+  border-radius:6px;
+  font-size:16px;
+  display:none;
+  z-index:9999;
 }
 
-/* CHAT */
-#chatBox {
-    position:fixed;
-    bottom:0;
-    left:0;
-    width:300px;
-    background:#000;
-    border-top:1px solid #333;
-}
-#messages {
-    height:150px;
-    overflow:auto;
-    font-size:14px;
-    padding:5px;
-}
-#chatInput { width:70%; }
-
-/* SHOP */
-#shop {
-    display:none;
-    position:fixed;
-    left:50%;
-    top:50%;
-    transform:translate(-50%,-50%);
-    background:#111;
-    padding:20px;
-    border:2px solid white;
+/* ===== ADMIN COINS BUTTON ===== */
+#addCoinsBtn {
+  position:fixed;
+  top:10px;
+  left:130px;
+  padding:8px 12px;
+  border-radius:6px;
+  font-size:16px;
+  background: #8e44ad;
+  color: #fff;
+  border: 2px solid #9b59b6;
+  box-shadow: 0 0 10px #9b59b6, 0 0 20px #8e44ad;
+  display:none;
+  z-index:9999;
 }
 
-/* INVENTORY */
-#inventory {
-    position:fixed;
-    right:0;
-    bottom:0;
-    width:200px;
-    background:#000;
-    border-left:1px solid #333;
-    border-top:1px solid #333;
-    padding:5px;
-    font-size:14px;
+/* ===== SHOP BUTTON ===== */
+#shopBtn {
+  position:fixed;
+  top:50px;
+  left:10px;
+  padding:8px 12px;
+  border-radius:6px;
+  font-size:16px;
+  background:#111;
+  color:#fff;
+  border:2px solid #9b59b6;
+  z-index:9999;
+  cursor:pointer;
 }
 
-/* IFRAME */
-#homeFrame {
-    width:100%;
-    height:80vh;
-    border:none;
-    display:none;
+#shopPanel{
+  position:fixed;
+  top:90px;
+  left:10px;
+  width:300px;
+  max-height:400px;
+  overflow-y:auto;
+  background:#111;
+  border:2px solid #9b59b6;
+  border-radius:6px;
+  padding:10px;
+  display:none;
+  z-index:9999;
+}
+
+#inventory{
+  margin-top:10px;
+  font-size:14px;
 }
 </style>
 </head>
 <body>
 
-<!-- LOGIN -->
-<div id="loginScreen">
-    <h2>Login</h2>
-    <input id="username" placeholder="Username">
-    <input id="password" type="password" placeholder="Password">
-    <button onclick="login()">Login</button>
-    <p id="loginMsg"></p>
+<div id="authBox">
+  <h2>Login</h2>
+  <input id="username" placeholder="Username">
+  <input id="password" type="password" placeholder="Password">
+  <button onclick="login()">Login</button>
+  <button onclick="signup()">Sign Up</button>
+  <div id="banMsg" style="color:red;margin-top:10px;"></div>
 </div>
 
-<!-- TOP BAR -->
-<div id="topBar">
-    <span id="coins">Coins: 0</span>
-    <button id="shopBtn" onclick="toggleShop()">🛒</button>
-    <button onclick="showHome()">Home</button>
-    <button onclick="toggleAdmin()" id="adminToggle" style="display:none;">Admin</button>
+<!-- COINS DISPLAY -->
+<div id="coinBox">Coins: <span id="coinCount">0</span></div>
+<button id="addCoinsBtn">+100 Coins</button>
+<button id="shopBtn">🛒 Shop</button>
+<div id="shopPanel">
+  <h3>MTG Pack Shop</h3>
+  <button onclick="buyPack()">Buy Pack (100 Coins)</button>
+  <div id="inventory"></div>
 </div>
 
-<!-- ADMIN PANEL -->
+<iframe id="mainFrame" src="https://sspv2play.neocities.org/home"></iframe>
+
+<button id="adminBtn" onclick="toggleAdmin()">⚙</button>
+
 <div id="adminPanel">
-    <h3>Admin Panel</h3>
-    <input id="addUser" placeholder="User to +100">
-    <button onclick="addCoins()">+100 Coins</button>
-    <hr>
-    <input id="banUser" placeholder="User to ban">
-    <button onclick="banUser()">Ban</button>
-    <hr>
-    <button onclick="getOnline()">Refresh Online</button>
-    <div id="onlineList"></div>
+  <h3>Users</h3>
+  <div id="onlineCount"></div>
+  <div id="usersList"></div>
 </div>
 
-<!-- SHOP -->
-<div id="shop">
-    <h3>Open Pack (100 coins)</h3>
-    <button onclick="buyPack()">Open Pack</button>
-    <button onclick="toggleShop()">Close</button>
-    <p id="packResult"></p>
-</div>
-
-<!-- INVENTORY -->
-<div id="inventory">
-    <b>Inventory</b>
-    <div id="invList"></div>
-</div>
-
-<!-- CHAT -->
 <div id="chatBox">
-    <div id="messages"></div>
-    <input id="chatInput">
-    <button onclick="sendMessage()">Send</button>
+  <div id="chatMessages"></div>
+  <input id="chatInput" placeholder="Type message...">
 </div>
 
-<iframe id="homeFrame" src="https://example.com"></iframe>
-
-<script>
-let currentUser = null;
-let ws;
-let lastMessageTime = 0;
-let lastMessageText = "";
-
-/* LOGIN */
-async function login() {
-    const username = document.getElementById("username").value;
-    const password = document.getElementById("password").value;
-
-    const res = await fetch("/login", {
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({ username, password })
-    });
-
-    const data = await res.json();
-
-    if (!data.success) {
-        document.getElementById("loginMsg").innerText = data.message;
-        return;
-    }
-
-    currentUser = data.user;
-
-    document.getElementById("loginScreen").style.display = "none";
-    document.getElementById("topBar").style.display = "block";
-    document.getElementById("homeFrame").style.display = "block";
-
-    updateCoins();
-    updateInventory();
-
-    if (currentUser.isAdmin) {
-        document.getElementById("adminToggle").style.display = "inline-block";
-    }
-
-    connectWS();
-}
-
-/* COINS */
-function updateCoins() {
-    document.getElementById("coins").innerText = "Coins: " + currentUser.coins;
-}
-
-/* SHOP */
-function toggleShop() {
-    const shop = document.getElementById("shop");
-    shop.style.display = shop.style.display === "block" ? "none" : "block";
-}
-
-async function buyPack() {
-    const res = await fetch("/buy-pack", {
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({ username: currentUser.username })
-    });
-
-    const data = await res.json();
-    if (!data.success) {
-        document.getElementById("packResult").innerText = "Not enough coins.";
-        return;
-    }
-
-    currentUser.coins = data.coins;
-    currentUser.inventory = data.inventory;
-
-    updateCoins();
-    updateInventory();
-
-    document.getElementById("packResult").innerText = "You got: " + data.card;
-}
-
-/* INVENTORY */
-function updateInventory() {
-    const list = document.getElementById("invList");
-    list.innerHTML = "";
-    for (let card in currentUser.inventory) {
-        list.innerHTML += card + " x" + currentUser.inventory[card] + "<br>";
-    }
-}
-
-/* ADMIN */
-function toggleAdmin() {
-    const panel = document.getElementById("adminPanel");
-    panel.style.display = panel.style.display === "block" ? "none" : "block";
-}
-
-async function addCoins() {
-    const target = document.getElementById("addUser").value;
-    await fetch("/add-coins", {
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({ admin: currentUser.username, target })
-    });
-}
-
-async function banUser() {
-    const target = document.getElementById("banUser").value;
-    await fetch("/ban", {
-        method:"POST",
-        headers:{"Content-Type":"application/json"},
-        body:JSON.stringify({ admin: currentUser.username, target })
-    });
-}
-
-function getOnline() {
-    ws.send(JSON.stringify({ type:"getOnline" }));
-}
-
-/* CHAT */
-function connectWS() {
-    ws = new WebSocket(`ws://${location.host}`);
-
-    ws.onopen = () => {
-        ws.send(JSON.stringify({ type:"join", username: currentUser.username }));
-    };
-
-    ws.onmessage = msg => {
-        const data = JSON.parse(msg.data);
-
-        if (data.type === "chat") {
-            document.getElementById("messages").innerHTML +=
-                "<div><b>"+data.username+":</b> "+data.message+"</div>";
-        }
-
-        if (data.type === "online") {
-            document.getElementById("onlineList").innerText =
-                data.users.join(", ");
-        }
-    };
-}
-
-function sendMessage() {
-    const input = document.getElementById("chatInput");
-    const text = input.value.trim();
-    if (!text) return;
-
-    const now = Date.now();
-
-    if (now - lastMessageTime < 15000) {
-        alert("Wait 15 seconds.");
-        return;
-    }
-
-    if (text === lastMessageText && now - lastMessageTime < 30000) {
-        alert("Wait 30 seconds to repeat.");
-        return;
-    }
-
-    ws.send(JSON.stringify({
-        type:"chat",
-        username: currentUser.username,
-        message:text
-    }));
-
-    lastMessageTime = now;
-    lastMessageText = text;
-    input.value = "";
-}
-
-/* HOME */
-function showHome() {
-    document.getElementById("homeFrame").requestFullscreen();
-}
-</script>
-
+<script src="auth.js"></script>
 </body>
 </html>
