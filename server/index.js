@@ -2,11 +2,8 @@ import express from "express";
 import session from "express-session";
 import { WebSocketServer } from "ws";
 import http from "http";
+import fs from "fs";
 import path from "path";
-import { fileURLToPath } from "url";
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 const app = express();
 const server = http.createServer(app);
@@ -19,11 +16,23 @@ app.use(session({
   saveUninitialized: false
 }));
 
-// ===== MEMORY USERS =====
-let users = {
-  "admin": { password: "admin123", role: "admin", approved: true }
-};
+// ===== USERS JSON FILE =====
+const usersFile = path.join(process.cwd(), "server/users.json");
+let users = {};
+try {
+  users = JSON.parse(fs.readFileSync(usersFile));
+} catch (e) {
+  console.log("No users.json found, creating default admin");
+  users = { "admin": { password: "admin123", role: "admin", approved: true } };
+  fs.writeFileSync(usersFile, JSON.stringify(users, null, 2));
+}
 
+// Helper to save users
+function saveUsers() {
+  fs.writeFileSync(usersFile, JSON.stringify(users, null, 2));
+}
+
+// ===== MEMORY =====
 let onlineUsers = new Set();
 let clients = new Map();
 let chatHistory = [];
@@ -35,6 +44,7 @@ app.post("/signup", (req, res) => {
   if (users[username]) return res.json({ success: false, msg: "User exists" });
 
   users[username] = { password, role: "user", approved: false };
+  saveUsers();
   res.json({ success: true, msg: "Waiting for admin approval" });
 });
 
@@ -57,7 +67,7 @@ app.post("/logout", (req, res) => {
   res.json({ success: true });
 });
 
-// ===== USERS LIST =====
+// ===== GET USERS (ADMIN) =====
 app.get("/users", (req, res) => {
   res.json({ users });
 });
@@ -67,10 +77,11 @@ app.post("/approve", (req, res) => {
   const { username } = req.body;
   if (!users[username]) return res.json({ success: false });
   users[username].approved = true;
+  saveUsers();
   res.json({ success: true });
 });
 
-// ===== CHAT =====
+// ===== CHAT WEBSOCKET =====
 wss.on("connection", ws => {
   let currentUser = null;
 
@@ -100,7 +111,7 @@ wss.on("connection", ws => {
 });
 
 // ===== SERVE FRONTEND =====
-app.use(express.static(path.join(__dirname, "../public")));
+app.use(express.static(path.join(process.cwd(), "public")));
 
 const PORT = process.env.PORT || 10000;
 server.listen(PORT, () => console.log(`SSP server running on port ${PORT}`));
