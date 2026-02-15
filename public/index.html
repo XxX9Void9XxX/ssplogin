@@ -12,66 +12,12 @@ button{padding:8px;margin:5px}
 iframe{border:none; display:none; width:100vw; height:100vh;}
 #adminBtn{position:fixed;bottom:10px;left:10px;width:40px;height:40px;background:#9b59b6;color:white;border:none;border-radius:6px;display:none;cursor:pointer}
 #adminPanel{position:fixed;left:10px;bottom:60px;background:#111;padding:10px;display:none;width:260px;border-radius:6px}
-#chatBox{position:fixed;right:10px;bottom:10px;width:300px;background:#111;padding:10px;border-radius:6px;display:none}
-#chatMessages{height:150px;overflow:auto;margin-bottom:5px;font-size:14px}
-
-/* ===== COINS & ADMIN BUTTON ===== */
-#coinBox{
-  position:fixed;
-  top:10px;
-  left:10px;
-  background:#111;
-  padding:8px 12px;
-  border-radius:6px;
-  font-size:16px;
-  display:none;
-  z-index:9999;
-}
-#addCoinsBtn{
-  position:fixed;
-  top:10px;
-  left:120px;
-  padding:8px 12px;
-  border:none;
-  border-radius:6px;
-  background:#8e44ad;
-  color:white;
-  font-weight:bold;
-  cursor:pointer;
-  box-shadow: 0 0 10px #9b59b6, 0 0 20px #8e44ad, 0 0 30px #9b59b6;
-  animation: glow 1.5s infinite alternate;
-  display:none;
-  z-index:9999;
-}
-#addCoinsBtn:hover {
-  box-shadow: 0 0 20px #9b59b6, 0 0 40px #8e44ad, 0 0 60px #9b59b6;
-  transform: scale(1.1);
-  transition: all 0.2s;
-}
-
-/* glowing Ban/Unban buttons */
-.banBtn {
-  background:#8e44ad;
-  color:white;
-  border:none;
-  border-radius:6px;
-  cursor:pointer;
-  font-weight:bold;
-  padding:4px 8px;
-  margin-left:5px;
-  box-shadow: 0 0 8px #9b59b6, 0 0 16px #8e44ad;
-  animation: glow 1.5s infinite alternate;
-}
-.banBtn:hover {
-  box-shadow: 0 0 16px #9b59b6, 0 0 32px #8e44ad;
-  transform: scale(1.05);
-  transition: all 0.2s;
-}
-
-@keyframes glow {
-  from { box-shadow: 0 0 10px #9b59b6, 0 0 20px #8e44ad, 0 0 30px #9b59b6; }
-  to   { box-shadow: 0 0 20px #9b59b6, 0 0 30px #8e44ad, 0 0 40px #9b59b6; }
-}
+#coinBox{position:fixed;top:10px;left:10px;background:#111;padding:8px 12px;border-radius:6px;font-size:16px;display:none;z-index:9999}
+#addCoinsBtn{position:fixed;top:10px;left:120px;padding:8px 12px;border:none;border-radius:6px;background:#8e44ad;color:white;font-weight:bold;cursor:pointer;box-shadow: 0 0 10px #9b59b6, 0 0 20px #8e44ad, 0 0 30px #9b59b6;animation: glow 1.5s infinite alternate;display:none;z-index:9999}
+#addCoinsBtn:hover{box-shadow:0 0 20px #9b59b6,0 0 40px #8e44ad,0 0 60px #9b59b6;transform:scale(1.1);transition:all 0.2s}
+.banBtn{background:#8e44ad;color:white;border:none;border-radius:6px;cursor:pointer;font-weight:bold;padding:4px 8px;margin-left:5px;box-shadow:0 0 8px #9b59b6,0 0 16px #8e44ad;animation:glow 1.5s infinite alternate}
+.banBtn:hover{box-shadow:0 0 16px #9b59b6,0 0 32px #8e44ad;transform:scale(1.05);transition:all 0.2s}
+@keyframes glow{from{box-shadow:0 0 10px #9b59b6,0 0 20px #8e44ad,0 0 30px #9b59b6;}to{box-shadow:0 0 20px #9b59b6,0 0 30px #8e44ad,0 0 40px #9b59b6;}}
 </style>
 </head>
 <body>
@@ -93,7 +39,6 @@ iframe{border:none; display:none; width:100vw; height:100vh;}
 
 <div id="adminPanel">
   <h3>Users</h3>
-  <div id="onlineCount"></div>
   <div id="usersList"></div>
 </div>
 
@@ -117,24 +62,19 @@ function login(){
     headers:{"Content-Type":"application/json"},
     body:JSON.stringify({username:username.value,password:password.value})
   }).then(r=>r.json()).then(d=>{
-    if(!d.success){
-      alert(d.banned?"You have been banned":"Login failed");
-      return;
-    }
+    if(!d.success){ alert(d.banned?"You have been banned":"Login failed"); return; }
     currentUser=d;
     authBox.style.display="none";
     mainFrame.style.display="block";
     coinBox.style.display="block";
-    if(d.role && d.role.toLowerCase()==="admin"){
-      adminBtn.style.display="block";
-      addCoinsBtn.style.display="block";
-    }
+    if(d.role && d.role.toLowerCase()==="admin"){ adminBtn.style.display="block"; addCoinsBtn.style.display="block"; }
     startCoins();
     loadFullscreenIframe();
+    loadUsers();
   });
 }
 
-/* ===== COIN SYSTEM ===== */
+/* ===== COINS ===== */
 function startCoins(){
   const coinKey="coins_"+currentUser.username;
   let coins=parseInt(localStorage.getItem(coinKey))||0;
@@ -146,14 +86,14 @@ function startCoins(){
 
 /* ===== ADMIN PANEL ===== */
 function toggleAdmin(){ adminPanel.style.display=adminPanel.style.display==="none"?"block":"none"; loadUsers(); }
-
 function loadUsers(){
+  if(!currentUser || !currentUser.role) return;
   fetch("/api/users").then(r=>r.json()).then(d=>{
     usersList.innerHTML="";
     d.users.forEach(u=>{
       const div=document.createElement("div");
-      div.innerHTML=`🟢 ${u.username} (${u.role})`;
-      if(currentUser.role && currentUser.role.toLowerCase()==="admin" && u.role.toLowerCase()!=="admin"){
+      div.innerHTML=`${u.username} (${u.role})`;
+      if(currentUser.role.toLowerCase()==="admin" && u.role.toLowerCase()!=="admin"){
         const btn=document.createElement("button");
         btn.className="banBtn";
         btn.innerText=u.banned?"Unban":"Ban";
@@ -171,23 +111,22 @@ function loadUsers(){
   });
 }
 
-/* ===== FULLSCREEN IFRAME ===== */
+/* ===== IFRAME ===== */
 function loadFullscreenIframe(){
   const iframe=document.getElementById("mainFrame");
-  const blankDoc=iframe.contentWindow.document;
-  blankDoc.open();
-  blankDoc.write(`
+  const doc=iframe.contentWindow.document;
+  doc.open();
+  doc.write(`
     <!DOCTYPE html>
     <html lang="en">
     <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Embedded SSP</title></head>
-    <body style="margin:0; height:100vh; overflow:hidden;">
-      <iframe src="https://sspv2play.neocities.org/home" style="border:none; width:100%; height:100%;" allowfullscreen sandbox="allow-scripts allow-forms allow-same-origin allow-popups allow-modals allow-presentation"></iframe>
+    <body style="margin:0;height:100vh;overflow:hidden;">
+      <iframe src="https://sspv2play.neocities.org/home" style="border:none;width:100%;height:100%;" allowfullscreen sandbox="allow-scripts allow-forms allow-same-origin allow-popups allow-modals allow-presentation"></iframe>
     </body>
     </html>
   `);
-  blankDoc.close();
+  doc.close();
 }
 </script>
-
 </body>
 </html>
