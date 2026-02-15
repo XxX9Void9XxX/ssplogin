@@ -18,14 +18,18 @@ app.use(cors());
 app.use(express.json());
 
 app.use(session({
-  secret: "ssp-secret",
+  secret: process.env.SESSION_SECRET || "ssp-secret",
   resave: false,
   saveUninitialized: false
 }));
 
+// Serve frontend
 app.use(express.static(path.join(__dirname, "../public")));
 
-const db = new sqlite3.Database("./users.db");
+// === PERSISTENT DATABASE PATH ===
+// Render persistent disk is mounted at /mnt/data
+const dbPath = process.env.DB_PATH || "/mnt/data/users.db";
+const db = new sqlite3.Database(dbPath);
 
 // ===== DATABASE SETUP =====
 db.serialize(() => {
@@ -40,7 +44,7 @@ db.serialize(() => {
     )
   `);
 
-  // Ensure permanent admin account exists
+  // Permanent admin account
   const adminUsername = "script.add.user";
   const adminPassword = "script=admin";
 
@@ -93,6 +97,7 @@ app.post("/login", (req, res) => {
     if (user.banned) return res.json({ success: false, banned: true });
     if (user.password !== password) return res.json({ success: false });
 
+    // Ensure permanent admin stays admin
     if (username === "script.add.user" && user.role !== "admin") {
       db.run("UPDATE users SET role='admin' WHERE username=?", [username]);
       user.role = "admin";
@@ -194,5 +199,6 @@ app.get("*", (req, res) => {
   res.sendFile(path.join(__dirname, "../public/index.html"));
 });
 
+// ===== START SERVER =====
 const PORT = process.env.PORT || 10000;
-server.listen(PORT, () => console.log("SSP FULL SYSTEM running on port", PORT));
+server.listen(PORT, () => console.log(`SSP FULL SYSTEM running on port ${PORT}`));
