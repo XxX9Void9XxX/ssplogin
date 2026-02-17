@@ -24,10 +24,9 @@ iframe{border:none; display:none; width:100vw; height:100vh;}
 <body>
 
 <div id="authBox">
-  <h2>Login / Sign Up</h2>
+  <h2>Login</h2>
   <input id="username" placeholder="Username">
   <input id="password" type="password" placeholder="Password">
-  <input id="email" type="email" placeholder="Email (required for signup)">
   <button onclick="login()">Login</button>
   <button onclick="signup()">Sign Up</button>
 </div>
@@ -58,47 +57,10 @@ let coinInterval=null;
 let lastMessageTime=0;
 let lastMessageText="";
 
-/* ===== SIGNUP WITH EMAIL VERIFICATION ===== */
+/* ===== SIGNUP ===== */
 function signup(){
-  const u=username.value;
-  const p=password.value;
-  const e=email.value;
-
-  if(!u || !p || !e){
-    alert("Fill in username, password, and email");
-    return;
-  }
-
-  fetch("/send-verification",{
-    method:"POST",
-    headers:{"Content-Type":"application/json"},
-    body:JSON.stringify({username:u,password:p,email:e})
-  })
-  .then(r=>r.json())
-  .then(d=>{
-    if(!d.success){
-      alert(d.error || "Error sending verification email");
-      return;
-    }
-
-    const code=prompt("Enter the 6-digit verification code sent to your email:");
-
-    if(!code) return;
-
-    fetch("/verify-code",{
-      method:"POST",
-      headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({email:e,code})
-    })
-    .then(r=>r.json())
-    .then(v=>{
-      if(v.success){
-        alert("Account created! You can now login.");
-      } else {
-        alert(v.error || "Verification failed");
-      }
-    });
-  });
+  fetch("/signup",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:username.value,password:password.value,email:"x"})})
+  .then(r=>r.json()).then(d=>alert(d.success?"Created":"Error"));
 }
 
 /* ===== LOGIN ===== */
@@ -143,31 +105,22 @@ function connectSocket(){
   chatInput.addEventListener("keypress",e=>{
     if(e.key==="Enter" && chatInput.value.trim()!==""){
       const now=Date.now();
-      if(now-lastMessageTime<15000){ alert("Wait before sending another message."); return; }
+      if(now-lastMessageTime<15000){ alert(`Wait ${Math.ceil((15000-(now-lastMessageTime))/1000)}s before sending another message.`); return; }
+      if(chatInput.value.trim()===lastMessageText && now-lastMessageTime<30000){ alert("Wait 30s before sending same message."); return; }
       socket.send(JSON.stringify({type:"chat",username:currentUser.username,role:currentUser.role,message:chatInput.value}));
       lastMessageTime=now;
+      lastMessageText=chatInput.value.trim();
       chatInput.value="";
     }
   });
 }
 
 /* ===== CHAT DISPLAY ===== */
-function addMessage(user,msg){ 
-  chatMessages.innerHTML+=`<div>&lt;${user}&gt; ${msg}</div>`; 
-  chatMessages.scrollTop=chatMessages.scrollHeight; 
-}
+function addMessage(user,msg){ chatMessages.innerHTML+=`<div>&lt;${user}&gt; ${msg}</div>`; chatMessages.scrollTop=chatMessages.scrollHeight; }
 
 /* ===== ADMIN PANEL ===== */
-function toggleAdmin(){ 
-  adminPanel.style.display=adminPanel.style.display==="none"?"block":"none"; 
-  loadUsers(); 
-}
-
-function updateOnlineUI(){ 
-  onlineCount.innerText="Online: "+onlineList.length; 
-  loadUsers(); 
-}
-
+function toggleAdmin(){ adminPanel.style.display=adminPanel.style.display==="none"?"block":"none"; loadUsers(); }
+function updateOnlineUI(){ onlineCount.innerText="Online: "+onlineList.length; loadUsers(); }
 function loadUsers(){
   fetch("/users").then(r=>r.json()).then(d=>{
     usersList.innerHTML="";
@@ -175,6 +128,16 @@ function loadUsers(){
       const div=document.createElement("div");
       const onlineMark = onlineList.includes(u.username) ? "🟢" : "⚫";
       div.innerHTML=`${onlineMark} ${u.username} (${u.role})`;
+      if(currentUser.role && currentUser.role.toLowerCase()==="admin" && u.role.toLowerCase()!=="admin"){
+        const btn=document.createElement("button");
+        btn.className="banBtn";
+        btn.innerText=u.banned?"Unban":"Ban";
+        btn.onclick=()=>{
+          fetch("/"+(u.banned?"unban":"ban"),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:u.username})})
+          .then(()=>{ u.banned=!u.banned; btn.innerText=u.banned?"Unban":"Ban"; });
+        };
+        div.appendChild(btn);
+      }
       usersList.appendChild(div);
     });
   });
@@ -187,9 +150,10 @@ function loadFullscreenIframe(){
   blankDoc.open();
   blankDoc.write(`
     <!DOCTYPE html>
-    <html>
+    <html lang="en">
+    <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Embedded SSP</title></head>
     <body style="margin:0; height:100vh; overflow:hidden;">
-      <iframe src="https://sspv2play.neocities.org/home" style="border:none; width:100%; height:100%;" allowfullscreen></iframe>
+      <iframe src="https://sspv2play.neocities.org/home" style="border:none; width:100%; height:100%;" allowfullscreen sandbox="allow-scripts allow-forms allow-same-origin allow-popups allow-modals allow-presentation"></iframe>
     </body>
     </html>
   `);
