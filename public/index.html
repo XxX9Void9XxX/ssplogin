@@ -58,21 +58,37 @@ let onlineList=[];
 
 /* ===== SIGNUP ===== */
 function signup(){
-  fetch("/api/signup",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:username.value,password:password.value})})
+  fetch("/api/signup",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({
+    username: document.getElementById("username").value,
+    password: document.getElementById("password").value
+  })})
   .then(r=>r.json()).then(d=>alert(d.success?"Created":"Error"));
 }
 
 /* ===== LOGIN ===== */
 function login(){
-  fetch("/api/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:username.value,password:password.value})})
+  fetch("/api/login",{
+    method:"POST",
+    headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({
+      username: document.getElementById("username").value,
+      password: document.getElementById("password").value
+    })
+  })
   .then(r=>r.json()).then(d=>{
-    if(!d.success){ if(d.banned){ alert("You have been banned"); return; } return alert("Login failed"); }
+    if(!d.success){ 
+      if(d.banned){ alert("You have been banned"); return; } 
+      return alert("Login failed"); 
+    }
     currentUser=d;
-    authBox.style.display="none";
-    mainFrame.style.display="block";
-    chatBox.style.display="block";
-    coinBox.style.display="block";
-    if(d.role && d.role.toLowerCase()==="admin"){ adminBtn.style.display="block"; addCoinsBtn.style.display="block"; }
+    document.getElementById("authBox").style.display="none";
+    document.getElementById("mainFrame").style.display="block";
+    document.getElementById("chatBox").style.display="block";
+    document.getElementById("coinBox").style.display="block";
+    if(d.role && d.role.toLowerCase()==="admin"){ 
+      document.getElementById("adminBtn").style.display="block"; 
+      document.getElementById("addCoinsBtn").style.display="block"; 
+    }
     startCoins();
     connectChat();
     loadFullscreenIframe();
@@ -80,85 +96,87 @@ function login(){
   });
 }
 
-/* ===== COINS SYSTEM ===== */
+/* ===== COIN SYSTEM ===== */
 function startCoins(){
   const coinKey="coins_"+currentUser.username;
   let coins=parseInt(localStorage.getItem(coinKey))||0;
-  function update(){ coinCount.innerText=coins; localStorage.setItem(coinKey,coins); }
+  function update(){ document.getElementById("coinCount").innerText=coins; localStorage.setItem(coinKey,coins); }
   update();
   coinInterval=setInterval(()=>{ coins+=25; update(); },60000);
-  addCoinsBtn.onclick=()=>{ coins+=100; update(); };
+  document.getElementById("addCoinsBtn").onclick=()=>{ coins+=100; update(); };
 }
 
-/* ===== CHAT POLLING ===== */
+/* ===== CHAT ===== */
 function connectChat(){
-  setInterval(async ()=>{
-    const res=await fetch("/api/chat");
-    const data=await res.json();
-    chatMessages.innerHTML="";
-    data.history.forEach(m=>addMessage(m.username,m.message));
-  },2000);
-
-  chatInput.addEventListener("keypress", async e=>{
+  const chatInput=document.getElementById("chatInput");
+  function loadHistory(){ 
+    fetch("/api/chat").then(r=>r.json()).then(d=>{
+      document.getElementById("chatMessages").innerHTML="";
+      d.history.forEach(m=>addMessage(m.username,m.message));
+    });
+  }
+  loadHistory();
+  chatInput.addEventListener("keypress",e=>{
     if(e.key==="Enter" && chatInput.value.trim()!==""){
       const now=Date.now();
       if(now-lastMessageTime<15000){ alert(`Wait ${Math.ceil((15000-(now-lastMessageTime))/1000)}s before sending another message.`); return; }
       if(chatInput.value.trim()===lastMessageText && now-lastMessageTime<30000){ alert("Wait 30s before sending same message."); return; }
-      await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:currentUser.username,role:currentUser.role,message:chatInput.value.trim()})});
+      fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({
+        username:currentUser.username,
+        role:currentUser.role,
+        message:chatInput.value
+      })});
       lastMessageTime=now;
       lastMessageText=chatInput.value.trim();
+      addMessage(currentUser.username,chatInput.value);
       chatInput.value="";
     }
   });
 }
 
-/* ===== DISPLAY CHAT MESSAGE ===== */
-function addMessage(user,msg){ chatMessages.innerHTML+=`<div>&lt;${user}&gt; ${msg}</div>`; chatMessages.scrollTop=chatMessages.scrollHeight; }
+function addMessage(user,msg){ 
+  const chatMessages=document.getElementById("chatMessages");
+  chatMessages.innerHTML+=`<div>&lt;${user}&gt; ${msg}</div>`; 
+  chatMessages.scrollTop=chatMessages.scrollHeight; 
+}
 
 /* ===== ADMIN PANEL ===== */
-function toggleAdmin(){ adminPanel.style.display=adminPanel.style.display==="none"?"block":"none"; loadUsers(); }
+function toggleAdmin(){ 
+  const panel=document.getElementById("adminPanel");
+  panel.style.display=panel.style.display==="none"?"block":"none"; 
+  loadUsers(); 
+}
 
-async function loadUsers(){
-  const res=await fetch("/api/users");
-  const data=await res.json();
-  usersList.innerHTML="";
-  data.users.forEach(u=>{
-    const div=document.createElement("div");
-    const onlineMark = onlineList.includes(u.username) ? "🟢" : "⚫";
-    div.innerHTML=`${onlineMark} ${u.username} (${u.role}) ${u.banned?"[BANNED]":""}`;
-    if(currentUser.role && currentUser.role.toLowerCase()==="admin" && u.role.toLowerCase()!=="admin"){
-      const btn=document.createElement("button");
-      btn.className="banBtn";
-      btn.innerText=u.banned?"Unban":"Ban";
-      btn.onclick=async ()=>{
-        await fetch("/api/"+(u.banned?"unban":"ban"),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:u.username})});
-        u.banned=!u.banned;
+function loadUsers(){
+  fetch("/api/users").then(r=>r.json()).then(d=>{
+    onlineList=d.users.map(u=>u.username);
+    document.getElementById("onlineCount").innerText="Online: "+d.users.length;
+    const usersList=document.getElementById("usersList");
+    usersList.innerHTML="";
+    d.users.forEach(u=>{
+      const div=document.createElement("div");
+      const onlineMark = onlineList.includes(u.username) ? "🟢" : "⚫";
+      div.innerHTML=`${onlineMark} ${u.username} (${u.role})`;
+      if(currentUser.role && currentUser.role.toLowerCase()==="admin" && u.role.toLowerCase()!=="admin"){
+        const btn=document.createElement("button");
+        btn.className="banBtn";
         btn.innerText=u.banned?"Unban":"Ban";
-        loadUsers();
-      };
-      div.appendChild(btn);
-    }
-    usersList.appendChild(div);
+        btn.onclick=()=>{ 
+          fetch("/api/"+(u.banned?"unban":"ban"),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:u.username})})
+          .then(()=>{ u.banned=!u.banned; btn.innerText=u.banned?"Unban":"Ban"; });
+        };
+        div.appendChild(btn);
+      }
+      usersList.appendChild(div);
+    });
   });
 }
 
 /* ===== FULLSCREEN IFRAME ===== */
 function loadFullscreenIframe(){
   const iframe=document.getElementById("mainFrame");
-  const blankDoc=iframe.contentWindow.document;
-  blankDoc.open();
-  blankDoc.write(`
-    <!DOCTYPE html>
-    <html lang="en">
-    <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Embedded SSP</title></head>
-    <body style="margin:0; height:100vh; overflow:hidden;">
-      <iframe src="https://sspv2play.neocities.org/home" style="border:none; width:100%; height:100%;" allowfullscreen sandbox="allow-scripts allow-forms allow-same-origin allow-popups allow-modals allow-presentation"></iframe>
-    </body>
-    </html>
-  `);
-  blankDoc.close();
+  iframe.src="https://sspv2play.neocities.org/home";
 }
 </script>
-
 </body>
 </html>
