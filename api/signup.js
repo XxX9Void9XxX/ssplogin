@@ -1,20 +1,14 @@
-// Initialize global users array and default admin
-let users = global.users || [];
-if (!users.find(u => u.username === "script.add.user")) {
-  users.push({ username: "script.add.user", password: "script=admin", role: "admin", banned: false, lastLogin: null });
-}
-global.users = users;
+import sqlite3 from "sqlite3";
+
+const db = new sqlite3.Database("./database.sqlite");
 
 export default function handler(req, res) {
-  if (req.method !== "POST") return res.status(405).send({ success: false });
-
-  const body = req.body;
-  if (!body) return res.json({ success: false });
-
-  const { username, password } = body;
+  if (req.method !== "POST") return res.status(405).json({ error: "Method not allowed" });
+  const { username, password } = req.body;
   if (!username || !password) return res.json({ success: false });
-  if (users.find(u => u.username === username)) return res.json({ success: false });
 
-  users.push({ username, password, role: "user", banned: false, lastLogin: null });
-  res.json({ success: true });
+  db.run("INSERT INTO users (username,password) VALUES (?,?)", [username, password], function(err) {
+    if (err) return res.json({ success: false, error: "Username exists" });
+    res.json({ success: true });
+  });
 }
