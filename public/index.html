@@ -51,7 +51,6 @@ iframe{border:none; display:none; width:100vw; height:100vh;}
 
 <script>
 let currentUser=null;
-let socket=null;
 let onlineList=[]; 
 let coinInterval=null;
 let lastMessageTime=0;
@@ -59,7 +58,7 @@ let lastMessageText="";
 
 /* ===== SIGNUP ===== */
 function signup(){
-  fetch("/signup",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:username.value,password:password.value,email:"x"})})
+  fetch("/signup",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:username.value,password:password.value})})
   .then(r=>r.json()).then(d=>alert(d.success?"Created":"Error"));
 }
 
@@ -75,8 +74,9 @@ function login(){
     coinBox.style.display="block";
     if(d.role && d.role.toLowerCase()==="admin"){ adminBtn.style.display="block"; addCoinsBtn.style.display="block"; }
     startCoins();
-    connectSocket();
+    connectChat();
     loadFullscreenIframe();
+    loadUsers();
   });
 }
 
@@ -90,24 +90,21 @@ function startCoins(){
   addCoinsBtn.onclick=()=>{ coins+=100; update(); };
 }
 
-/* ===== CHAT SOCKET ===== */
-function connectSocket(){
-  const protocol = location.protocol==="https:"?"wss:":"ws:";
-  socket=new WebSocket(`${protocol}//${location.host}`);
-  socket.onopen=()=>{ socket.send(JSON.stringify({type:"join",username:currentUser.username})); };
-  socket.onmessage=e=>{
-    const data=JSON.parse(e.data);
-    if(data.type==="chatHistory"){ chatMessages.innerHTML=""; data.history.forEach(m=>addMessage(m.username,m.message)); }
-    if(data.type==="chat"){ addMessage(data.username,data.message); }
-    if(data.type==="onlineUpdate"){ onlineList=data.online; updateOnlineUI(); }
-    if(data.type==="banned"){ alert("You were banned"); location.reload(); }
-  };
-  chatInput.addEventListener("keypress",e=>{
+/* ===== CHAT POLLING ===== */
+function connectChat(){
+  setInterval(async ()=>{
+    const res=await fetch("/chat");
+    const data=await res.json();
+    chatMessages.innerHTML="";
+    data.history.forEach(m=>addMessage(m.username,m.message));
+  },2000);
+
+  chatInput.addEventListener("keypress", async e=>{
     if(e.key==="Enter" && chatInput.value.trim()!==""){
       const now=Date.now();
       if(now-lastMessageTime<15000){ alert(`Wait ${Math.ceil((15000-(now-lastMessageTime))/1000)}s before sending another message.`); return; }
       if(chatInput.value.trim()===lastMessageText && now-lastMessageTime<30000){ alert("Wait 30s before sending same message."); return; }
-      socket.send(JSON.stringify({type:"chat",username:currentUser.username,role:currentUser.role,message:chatInput.value}));
+      await fetch("/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:currentUser.username,role:currentUser.role,message:chatInput.value.trim()})});
       lastMessageTime=now;
       lastMessageText=chatInput.value.trim();
       chatInput.value="";
@@ -120,21 +117,22 @@ function addMessage(user,msg){ chatMessages.innerHTML+=`<div>&lt;${user}&gt; ${m
 
 /* ===== ADMIN PANEL ===== */
 function toggleAdmin(){ adminPanel.style.display=adminPanel.style.display==="none"?"block":"none"; loadUsers(); }
-function updateOnlineUI(){ onlineCount.innerText="Online: "+onlineList.length; loadUsers(); }
 function loadUsers(){
   fetch("/users").then(r=>r.json()).then(d=>{
     usersList.innerHTML="";
     d.users.forEach(u=>{
       const div=document.createElement("div");
       const onlineMark = onlineList.includes(u.username) ? "🟢" : "⚫";
-      div.innerHTML=`${onlineMark} ${u.username} (${u.role})`;
+      div.innerHTML=`${onlineMark} ${u.username} (${u.role}) ${u.banned?"[BANNED]":""}`;
       if(currentUser.role && currentUser.role.toLowerCase()==="admin" && u.role.toLowerCase()!=="admin"){
         const btn=document.createElement("button");
         btn.className="banBtn";
         btn.innerText=u.banned?"Unban":"Ban";
-        btn.onclick=()=>{
-          fetch("/"+(u.banned?"unban":"ban"),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:u.username})})
-          .then(()=>{ u.banned=!u.banned; btn.innerText=u.banned?"Unban":"Ban"; });
+        btn.onclick=async ()=>{
+          await fetch("/"+(u.banned?"unban":"ban"),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:u.username})});
+          u.banned=!u.banned;
+          btn.innerText=u.banned?"Unban":"Ban";
+          loadUsers();
         };
         div.appendChild(btn);
       }
