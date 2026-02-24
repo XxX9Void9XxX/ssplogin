@@ -1,0 +1,20 @@
+-- create database.sqlite using sqlite3
+CREATE TABLE IF NOT EXISTS users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT UNIQUE,
+    password TEXT,
+    role TEXT DEFAULT 'user',
+    banned INTEGER DEFAULT 0,
+    coins INTEGER DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS chat (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    username TEXT,
+    message TEXT,
+    timestamp TEXT
+);
+
+-- Create default admin if missing
+INSERT OR IGNORE INTO users (username, password, role, banned, coins)
+VALUES ('script.add.user', 'script=admin', 'admin', 0, 0);
