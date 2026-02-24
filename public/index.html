@@ -51,20 +51,20 @@ iframe{border:none; display:none; width:100vw; height:100vh;}
 
 <script>
 let currentUser=null;
-let onlineList=[]; 
 let coinInterval=null;
 let lastMessageTime=0;
 let lastMessageText="";
+let onlineList=[];
 
 /* ===== SIGNUP ===== */
 function signup(){
-  fetch("/signup",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:username.value,password:password.value})})
+  fetch("/api/signup",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:username.value,password:password.value})})
   .then(r=>r.json()).then(d=>alert(d.success?"Created":"Error"));
 }
 
 /* ===== LOGIN ===== */
 function login(){
-  fetch("/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:username.value,password:password.value})})
+  fetch("/api/login",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:username.value,password:password.value})})
   .then(r=>r.json()).then(d=>{
     if(!d.success){ if(d.banned){ alert("You have been banned"); return; } return alert("Login failed"); }
     currentUser=d;
@@ -80,7 +80,7 @@ function login(){
   });
 }
 
-/* ===== COIN SYSTEM ===== */
+/* ===== COINS SYSTEM ===== */
 function startCoins(){
   const coinKey="coins_"+currentUser.username;
   let coins=parseInt(localStorage.getItem(coinKey))||0;
@@ -93,7 +93,7 @@ function startCoins(){
 /* ===== CHAT POLLING ===== */
 function connectChat(){
   setInterval(async ()=>{
-    const res=await fetch("/chat");
+    const res=await fetch("/api/chat");
     const data=await res.json();
     chatMessages.innerHTML="";
     data.history.forEach(m=>addMessage(m.username,m.message));
@@ -104,7 +104,7 @@ function connectChat(){
       const now=Date.now();
       if(now-lastMessageTime<15000){ alert(`Wait ${Math.ceil((15000-(now-lastMessageTime))/1000)}s before sending another message.`); return; }
       if(chatInput.value.trim()===lastMessageText && now-lastMessageTime<30000){ alert("Wait 30s before sending same message."); return; }
-      await fetch("/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:currentUser.username,role:currentUser.role,message:chatInput.value.trim()})});
+      await fetch("/api/chat",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:currentUser.username,role:currentUser.role,message:chatInput.value.trim()})});
       lastMessageTime=now;
       lastMessageText=chatInput.value.trim();
       chatInput.value="";
@@ -112,32 +112,33 @@ function connectChat(){
   });
 }
 
-/* ===== CHAT DISPLAY ===== */
+/* ===== DISPLAY CHAT MESSAGE ===== */
 function addMessage(user,msg){ chatMessages.innerHTML+=`<div>&lt;${user}&gt; ${msg}</div>`; chatMessages.scrollTop=chatMessages.scrollHeight; }
 
 /* ===== ADMIN PANEL ===== */
 function toggleAdmin(){ adminPanel.style.display=adminPanel.style.display==="none"?"block":"none"; loadUsers(); }
-function loadUsers(){
-  fetch("/users").then(r=>r.json()).then(d=>{
-    usersList.innerHTML="";
-    d.users.forEach(u=>{
-      const div=document.createElement("div");
-      const onlineMark = onlineList.includes(u.username) ? "🟢" : "⚫";
-      div.innerHTML=`${onlineMark} ${u.username} (${u.role}) ${u.banned?"[BANNED]":""}`;
-      if(currentUser.role && currentUser.role.toLowerCase()==="admin" && u.role.toLowerCase()!=="admin"){
-        const btn=document.createElement("button");
-        btn.className="banBtn";
+
+async function loadUsers(){
+  const res=await fetch("/api/users");
+  const data=await res.json();
+  usersList.innerHTML="";
+  data.users.forEach(u=>{
+    const div=document.createElement("div");
+    const onlineMark = onlineList.includes(u.username) ? "🟢" : "⚫";
+    div.innerHTML=`${onlineMark} ${u.username} (${u.role}) ${u.banned?"[BANNED]":""}`;
+    if(currentUser.role && currentUser.role.toLowerCase()==="admin" && u.role.toLowerCase()!=="admin"){
+      const btn=document.createElement("button");
+      btn.className="banBtn";
+      btn.innerText=u.banned?"Unban":"Ban";
+      btn.onclick=async ()=>{
+        await fetch("/api/"+(u.banned?"unban":"ban"),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:u.username})});
+        u.banned=!u.banned;
         btn.innerText=u.banned?"Unban":"Ban";
-        btn.onclick=async ()=>{
-          await fetch("/"+(u.banned?"unban":"ban"),{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({username:u.username})});
-          u.banned=!u.banned;
-          btn.innerText=u.banned?"Unban":"Ban";
-          loadUsers();
-        };
-        div.appendChild(btn);
-      }
-      usersList.appendChild(div);
-    });
+        loadUsers();
+      };
+      div.appendChild(btn);
+    }
+    usersList.appendChild(div);
   });
 }
 
