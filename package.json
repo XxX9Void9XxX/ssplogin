@@ -1,12 +1,8 @@
 {
-  "name": "ssplogin",
+  "name": "sspv2",
   "version": "1.0.0",
   "type": "module",
-  "scripts": {
-    "start": "vercel dev"
-  },
   "dependencies": {
-    "express-session": "^1.17.3",
-    "cors": "^2.8.5"
+    "sqlite3": "^5.1.6"
   }
 }
